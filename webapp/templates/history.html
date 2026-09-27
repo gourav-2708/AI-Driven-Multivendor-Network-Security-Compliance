@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}History{% endblock %}
+{% block page_title %}Audit History{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <p class="text-muted mb-0">{{ entries|length }} past audit(s) stored</p>
+  <a href="/" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>New Audit</a>
+</div>
+
+{% if entries %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-dark table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Timestamp</th><th>Files</th><th>Vendor</th>
+          <th>Devices</th><th>Avg Score</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td><span class="text-muted small">{{ e.timestamp }}</span></td>
+          <td>
+            {% for f in e.files %}
+            <span class="badge bg-dark border me-1"><i class="bi bi-file-code me-1"></i>{{ f }}</span>
+            {% endfor %}
+          </td>
+          <td><span class="badge bg-secondary">{{ e.vendor|upper }}</span></td>
+          <td>{{ e.devices }}</td>
+          <td>
+            <span class="fw-bold
+              {% if e.avg_score == '?' %}text-muted
+              {% elif e.avg_score >= 80 %}text-success
+              {% elif e.avg_score >= 50 %}text-warning
+              {% else %}text-danger{% endif %}">
+              {{ e.avg_score }}{% if e.avg_score != '?' %}/100{% endif %}
+            </span>
+          </td>
+          <td>
+            <div class="btn-group btn-group-sm">
+              <a href="/results/{{ e.id }}" class="btn btn-outline-primary">
+                <i class="bi bi-eye"></i>
+              </a>
+              <a href="/api/download/{{ e.id }}/json" class="btn btn-outline-secondary">
+                <i class="bi bi-download"></i>
+              </a>
+              <button class="btn btn-outline-danger" onclick="deleteEntry('{{ e.id }}', this)">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="text-center py-5">
+  <i class="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
+  <p class="text-muted">No audit history yet.</p>
+  <a href="/" class="btn btn-primary">Run your first audit</a>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function deleteEntry(id, btn) {
+  if (!confirm('Delete this audit entry?')) return;
+  await fetch('/api/result/' + id, { method: 'DELETE' });
+  btn.closest('tr').remove();
+}
+</script>
+{% endblock %}

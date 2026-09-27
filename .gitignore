@@ -1,0 +1,58 @@
+# ============================================================
+#  net-audit  —  .gitignore
+# ============================================================
+
+# --- Compiled binary ---
+net-audit.exe
+net-audit
+*.o
+*.obj
+*.a
+*.lib
+
+# --- Test binaries ---
+tests/test_parser.exe
+tests/test_engine.exe
+tests/test_runner.exe
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# --- Flask runtime data (uploads & history) ---
+webapp/uploads/
+webapp/history/
+
+# --- Example/generated reports (optional: remove if you want to keep them) ---
+example_report_*.json
+example_report_*.csv
+example_report_*.txt
+
+# --- Desktop GUI cache ---
+desktop/__pycache__/
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# --- Windows ---
+$RECYCLE.BIN/

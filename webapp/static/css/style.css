@@ -1,0 +1,375 @@
+/* ============================================================================
+   net-audit  |  Slate Pro Design System  v3
+   Background: diagonal slate gradient  #0f172a -> #1e293b
+   Cards: #1e293b  border: #334155  shadow: lifted
+   Accent: indigo #6366f1   Severity: 4-step harmonized palette
+   ============================================================================ */
+
+/* -- Tokens ---------------------------------------------------------------- */
+:root {
+  --sidebar-w : 242px;
+  --topbar-h  : 56px;
+
+  /* Backgrounds */
+  --bg-from   : #0f172a;
+  --bg-to     : #1e293b;
+  --surface   : #1e293b;
+  --surface2  : #263348;
+  --surface3  : #2e3d56;
+
+  /* Borders & shadow */
+  --border    : #334155;
+  --border-lo : rgba(51,65,85,0.6);
+  --shadow-sm : 0 1px 4px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-md : 0 4px 20px rgba(0,0,0,0.55);
+
+  /* Text */
+  --text      : #e2e8f0;
+  --text-hi   : #f8fafc;
+  --muted     : #cbd5e1;   /* was #94a3b8 — bumped up for readability */
+  --muted-lo  : #64748b;
+
+  /* Accent — indigo */
+  --accent    : #6366f1;
+  --accent-hi : #818cf8;
+  --accent-lo : rgba(99,102,241,0.14);
+  --accent-md : rgba(99,102,241,0.28);
+
+  /* Severity — harmonized 4-step */
+  --crit      : #f87171;   /* rose-400    */
+  --high      : #fb923c;   /* orange-400  */
+  --med       : #facc15;   /* yellow-400  */
+  --low       : #38bdf8;   /* sky-400     */
+  --good      : #34d399;   /* emerald-400 */
+
+  /* Radius */
+  --r-sm : 6px;
+  --r-md : 10px;
+  --r-lg : 14px;
+}
+
+/* -- Reset ----------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Nuclear reset for Bootstrap dark theme override */
+html, html[data-bs-theme="dark"] {
+  --bs-body-bg            : #0f172a;
+  --bs-body-color         : #e2e8f0;
+  --bs-secondary-bg       : #1e293b;
+  --bs-tertiary-bg        : #263348;
+  --bs-border-color       : #334155;
+  --bs-card-bg            : #1e293b;
+  --bs-link-color         : #818cf8;
+  --bs-link-hover-color   : #f8fafc;
+}
+
+html, body {
+  background-color : #0f172a !important;
+  color            : #e2e8f0 !important;
+}
+
+body {
+  background : linear-gradient(135deg, var(--bg-from) 0%, var(--bg-to) 100%) fixed !important;
+  color      : var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size  : 14px;
+  line-height: 1.6;
+  display    : flex;
+  min-height : 100vh;
+}
+
+a { color: var(--accent-hi); text-decoration: none; }
+a:hover { color: var(--text-hi); }
+::selection { background: var(--accent-md); color: var(--text-hi); }
+
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 10px; }
+
+/* ============================================================================
+   SIDEBAR
+   ============================================================================ */
+.sidebar {
+  width          : var(--sidebar-w);
+  background     : rgba(15,23,42,0.96);
+  border-right   : 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  position       : fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index        : 100;
+  display        : flex;
+  flex-direction : column;
+}
+
+.sidebar-brand {
+  display        : flex;
+  align-items    : center;
+  gap            : 10px;
+  padding        : 18px 20px;
+  font-size      : 1.05rem;
+  font-weight    : 700;
+  color          : var(--text-hi) !important;
+  text-decoration: none;
+  border-bottom  : 1px solid var(--border);
+}
+.sidebar-brand i   { color: var(--accent-hi); font-size: 1.2rem; }
+.sidebar-brand span { color: var(--accent-hi); }
+
+.sidebar-nav { padding: 12px 10px; flex: 1; }
+
+.nav-item {
+  display        : flex;
+  align-items    : center;
+  gap            : 10px;
+  padding        : 9px 13px;
+  border-radius  : var(--r-md);
+  color          : var(--muted) !important;
+  text-decoration: none !important;
+  font-size      : .875rem;
+  font-weight    : 500;
+  transition     : background .15s, color .15s;
+  margin-bottom  : 2px;
+}
+.nav-item i { width: 18px; text-align: center; }
+.nav-item:hover  { background: var(--surface2); color: var(--text) !important; }
+.nav-item.active {
+  background  : var(--accent-lo);
+  color       : var(--accent-hi) !important;
+  font-weight : 600;
+  border-left : 3px solid var(--accent);
+  padding-left: 10px;
+}
+
+.sidebar-footer {
+  padding    : 14px 20px;
+  border-top : 1px solid var(--border);
+  font-size  : .75rem;
+  color      : var(--muted-lo);
+  line-height: 1.5;
+}
+
+/* Auditor Ready badge */
+.badge-ready {
+  display     : inline-flex;
+  align-items : center;
+  gap         : 5px;
+  background  : rgba(52,211,153,0.12);
+  border      : 1px solid rgba(52,211,153,0.35);
+  color       : var(--good);
+  border-radius: 20px;
+  padding     : 3px 10px;
+  font-size   : .72rem;
+  font-weight : 600;
+  box-shadow  : 0 0 8px rgba(52,211,153,0.15);
+}
+
+/* ============================================================================
+   MAIN LAYOUT
+   ============================================================================ */
+.main-content {
+  margin-left   : var(--sidebar-w);
+  flex          : 1;
+  display       : flex;
+  flex-direction: column;
+  min-height    : 100vh;
+}
+
+.topbar {
+  height         : var(--topbar-h);
+  background     : rgba(30,41,59,0.92);
+  border-bottom  : 1px solid var(--border);
+  backdrop-filter: blur(6px);
+  display        : flex;
+  align-items    : center;
+  justify-content: space-between;
+  padding        : 0 28px;
+  position       : sticky;
+  top            : 0;
+  z-index        : 90;
+  box-shadow     : var(--shadow-sm);
+}
+.topbar h1,.topbar h2,.topbar h3,.topbar h4,.topbar h5,.topbar h6 {
+  color: var(--text-hi); font-weight: 600; font-size: 1rem; margin: 0;
+}
+
+.content-area { padding: 28px 32px; flex: 1; }
+
+/* ============================================================================
+   CARDS
+   ============================================================================ */
+.card {
+  background   : var(--surface);
+  border       : 1px solid var(--border) !important;
+  border-radius: var(--r-lg) !important;
+  box-shadow   : var(--shadow-sm);
+}
+.card-header {
+  background    : transparent;
+  border-bottom : 1px solid var(--border) !important;
+  padding       : 12px 18px;
+  font-size     : .72rem;
+  font-weight   : 700;
+  color         : var(--muted-lo);
+  letter-spacing: .8px;
+  text-transform: uppercase;
+}
+.card-body { padding: 20px; }
+
+/* ============================================================================
+   DROP ZONE
+   ============================================================================ */
+.drop-zone {
+  border       : 2px dashed var(--border);
+  border-radius: var(--r-lg);
+  padding      : 48px 24px;
+  text-align   : center;
+  cursor       : pointer;
+  transition   : border-color .2s, background .2s;
+  background   : rgba(15,23,42,0.3);
+}
+.drop-zone:hover, .drop-zone.hover {
+  border-color: var(--accent);
+  background  : var(--accent-lo);
+}
+.drop-zone .bi  { font-size: 2.4rem; color: var(--muted-lo); display:block; margin-bottom:12px; }
+.drop-zone p    { color: var(--muted); margin: 0; }
+
+/* ============================================================================
+   FILE LIST
+   ============================================================================ */
+.file-list { background: var(--surface2); border-radius: var(--r-md); padding: 10px 12px; border: 1px solid var(--border); }
+.file-item { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border-lo); font-size:.83rem; color:var(--text); }
+.file-item:last-child { border-bottom: none; }
+.file-item i { color: var(--accent-hi); }
+
+/* ============================================================================
+   SEVERITY BADGES — harmonized palette
+   ============================================================================ */
+.badge-critical { background: rgba(248,113,113,0.18) !important; color: var(--crit) !important; border: 1px solid rgba(248,113,113,0.4) !important; }
+.badge-high     { background: rgba(251,146,60,0.18)  !important; color: var(--high) !important; border: 1px solid rgba(251,146,60,0.4)  !important; }
+.badge-medium   { background: rgba(250,204,21,0.14)  !important; color: var(--med)  !important; border: 1px solid rgba(250,204,21,0.4)  !important; }
+.badge-low      { background: rgba(56,189,248,0.14)  !important; color: var(--low)  !important; border: 1px solid rgba(56,189,248,0.4)  !important; }
+
+/* Severity pills — metric counters */
+.sev-pill { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:14px 20px; border-radius:var(--r-lg); min-width:88px; }
+.pill-count { font-size:1.9rem; font-weight:800; line-height:1; }
+.pill-label { font-size:.7rem; font-weight:600; letter-spacing:.7px; margin-top:3px; opacity:.85; text-transform:uppercase; }
+.pill-critical { background:rgba(248,113,113,0.12); border:1px solid rgba(248,113,113,0.30); color:var(--crit); }
+.pill-high     { background:rgba(251,146,60,0.12);  border:1px solid rgba(251,146,60,0.30);  color:var(--high); }
+.pill-medium   { background:rgba(250,204,21,0.10);  border:1px solid rgba(250,204,21,0.30);  color:var(--med);  }
+.pill-low      { background:rgba(56,189,248,0.10);  border:1px solid rgba(56,189,248,0.30);  color:var(--low);  }
+
+/* ============================================================================
+   SVG GAUGE — replaces Chart.js doughnut
+   ============================================================================ */
+.gauge-wrap {
+  width  : 220px;
+  height : 128px;
+  margin : 0 auto 4px;
+  position: relative;
+}
+.gauge-wrap svg { display: block; }
+
+/* ============================================================================
+   STAT CARDS
+   ============================================================================ */
+.stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:20px; text-align:center; box-shadow:var(--shadow-sm); transition:border-color .2s, box-shadow .2s; }
+.stat-card:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-lo), var(--shadow-md); }
+.stat-value { font-size:2rem; font-weight:800; line-height:1; color:var(--text-hi); }
+.stat-value small { font-size:.95rem; font-weight:500; color:var(--muted-lo); }
+.stat-label { font-size:.72rem; color:var(--muted); margin-top:5px; letter-spacing:.6px; font-weight:600; text-transform:uppercase; }
+.stat-green  { border-color: rgba(52,211,153,0.35); }
+.stat-yellow { border-color: rgba(250,204,21,0.30); }
+.stat-red    { border-color: rgba(248,113,113,0.35); }
+.stat-orange { border-color: rgba(251,146,60,0.35); }
+
+/* ============================================================================
+   FINDINGS ACCORDION
+   ============================================================================ */
+.accordion { --bs-accordion-bg: transparent; }
+.accordion-item { background:transparent !important; border:none !important; border-bottom:1px solid var(--border-lo) !important; }
+.accordion-item:last-child { border-bottom:none !important; }
+.accordion-button { background:transparent !important; color:var(--text) !important; box-shadow:none !important; font-size:.875rem; padding:13px 16px; }
+.accordion-button:not(.collapsed) { background:var(--accent-lo) !important; color:var(--text-hi) !important; }
+.accordion-button::after { filter: invert(0.6) sepia(1) hue-rotate(210deg) saturate(0.8); }
+.accordion-body { background:var(--surface2); border-radius:0 0 var(--r-md) var(--r-md); padding:14px 18px; }
+.finding-desc   { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+.sev-badge      { font-size:.7rem; min-width:72px; text-align:center; border-radius:5px; padding:2px 7px; font-weight:600; }
+.finding-inline { font-size:.83rem; color:var(--muted); }
+
+/* ============================================================================
+   PROGRESS OVERLAY
+   ============================================================================ */
+.progress-overlay {
+  position:fixed; inset:0;
+  background:rgba(15,23,42,0.85);
+  backdrop-filter:blur(6px);
+  display:flex; align-items:center; justify-content:center;
+  z-index:999;
+}
+.progress-overlay .spinner-border { color: var(--accent-hi) !important; }
+
+/* ============================================================================
+   RECENT AUDIT ITEMS
+   ============================================================================ */
+.recent-item { display:flex; align-items:center; gap:14px; padding:12px 16px; border-radius:var(--r-md); background:var(--surface); border:1px solid var(--border); margin-bottom:8px; text-decoration:none !important; color:var(--text) !important; transition:border-color .15s, background .15s; }
+.recent-item:hover { border-color:var(--accent); background:var(--surface2); }
+.recent-score { font-size:1.3rem; font-weight:800; min-width:48px; text-align:center; }
+.recent-item .badge { font-size:.7rem; }
+
+/* ============================================================================
+   TABLES
+   ============================================================================ */
+.table { color:var(--text); --bs-table-bg:transparent; }
+.table-dark { --bs-table-bg:transparent; --bs-table-border-color:var(--border); }
+.table-header th { font-size:.75rem; color:var(--muted-lo); letter-spacing:.6px; text-transform:uppercase; border-bottom:1px solid var(--border); padding-bottom:10px; }
+.table > :not(caption) > * > * { border-color: var(--border-lo); }
+
+/* ============================================================================
+   BREADCRUMB
+   ============================================================================ */
+.breadcrumb-item.active { color: var(--muted-lo); }
+.breadcrumb-item + .breadcrumb-item::before { color: var(--muted-lo); opacity:.5; }
+.breadcrumb-item a { color: var(--accent-hi); }
+
+/* ============================================================================
+   BUTTONS
+   ============================================================================ */
+.btn-primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+.btn-primary:hover { background:#4f46e5; border-color:#4f46e5; }
+.btn-outline-secondary { border-color:var(--border); color:var(--muted); }
+.btn-outline-secondary:hover { background:var(--surface2); border-color:var(--border); color:var(--text); }
+.btn-outline-danger { border-color:rgba(248,113,113,0.4); color:var(--crit); }
+.btn-outline-danger:hover { background:rgba(248,113,113,0.1); color:var(--crit); border-color:var(--crit); }
+
+/* ============================================================================
+   FORM CONTROLS
+   ============================================================================ */
+.form-control,.form-select { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:var(--r-sm); }
+.form-control:focus,.form-select:focus { background:var(--surface2); border-color:var(--accent); color:var(--text-hi); box-shadow:0 0 0 3px var(--accent-lo); outline:none; }
+.form-select option { background:var(--surface2); color:var(--text); }
+.form-label { color:var(--muted); font-size:.85rem; font-weight:500; }
+.form-check-input:checked { background-color:var(--accent); border-color:var(--accent); }
+
+/* ============================================================================
+   ALERT BANNER
+   ============================================================================ */
+.alert-danger { background:rgba(248,113,113,0.09); border:1px solid rgba(248,113,113,0.30); color:#fca5a5; border-radius:var(--r-md); }
+
+/* ============================================================================
+   UTILITIES & ANIMATION
+   ============================================================================ */
+.text-accent  { color:var(--accent-hi) !important; }
+.text-muted   { color:var(--muted) !important; }
+.text-good    { color:var(--good)  !important; }
+.text-crit    { color:var(--crit)  !important; }
+.bg-surface   { background:var(--surface)  !important; }
+.bg-surface2  { background:var(--surface2) !important; }
+
+hr { border-color:var(--border); opacity:1; }
+
+.content-area > * { animation:fadeUp .22s ease both; }
+@keyframes fadeUp {
+  from { opacity:0; transform:translateY(7px); }
+  to   { opacity:1; transform:translateY(0);   }
+}
