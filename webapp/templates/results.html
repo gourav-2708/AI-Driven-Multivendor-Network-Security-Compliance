@@ -29,11 +29,11 @@
             fill="none" stroke="#06b6d4" stroke-width="14" stroke-linecap="round"
             stroke-dasharray="276.46" stroke-dashoffset="276.46"/>
       <text id="gauge-number" x="110" y="96" text-anchor="middle" dominant-baseline="middle"
-            fill="#f1f5f9" font-size="32" font-family="Space Grotesk,sans-serif" font-weight="800">
+            fill="#111827" font-size="32" font-family="Space Grotesk,sans-serif" font-weight="800">
         {{ report.score }}
       </text>
       <text id="gauge-grade" x="110" y="118" text-anchor="middle"
-            fill="#64748b" font-size="11" font-family="Inter,sans-serif" font-weight="600">
+            fill="#6b7280" font-size="11" font-family="Inter,sans-serif" font-weight="600">
         /100
       </text>
     </svg>
@@ -167,16 +167,16 @@
     <div class="stat-value">{{ report.devices_audited }}</div>
     <div class="stat-label">Devices</div>
   </div>
-  <div class="stat-card {% if report.avg_score >= 80 %}stat-green{% elif report.avg_score >= 50 %}stat-yellow{% else %}stat-red{% endif %}" role="listitem">
-    <div class="stat-value">{{ report.avg_score }}<small>/100</small></div>
+  <div class="stat-card {% if (report.avg_score | default(0)) >= 80 %}stat-green{% elif (report.avg_score | default(0)) >= 50 %}stat-yellow{% else %}stat-red{% endif %}" role="listitem">
+    <div class="stat-value">{{ report.avg_score | default('?') }}<small>/100</small></div>
     <div class="stat-label">Avg Score</div>
   </div>
   <div class="stat-card stat-red" role="listitem">
-    <div class="stat-value">{{ report.total_critical }}</div>
+    <div class="stat-value">{{ report.total_critical | default(0) }}</div>
     <div class="stat-label">Critical</div>
   </div>
   <div class="stat-card stat-orange" role="listitem">
-    <div class="stat-value">{{ report.total_high }}</div>
+    <div class="stat-value">{{ report.total_high | default(0) }}</div>
     <div class="stat-label">High</div>
   </div>
 </div>

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,7 +14,7 @@
   <!-- Inline theme init (prevents flash) -->
   <script>
     (function(){
-      var t = localStorage.getItem('na-theme') || 'dark';
+      var t = localStorage.getItem('na-theme') || 'light';
       document.documentElement.setAttribute('data-theme', t);
     })();
   </script>
@@ -157,10 +157,10 @@
 <script>
 /* Theme toggle */
 (function() {
-  var saved = localStorage.getItem('na-theme') || 'dark';
+  var saved = localStorage.getItem('na-theme') || 'light';
   document.documentElement.setAttribute('data-theme', saved);
   var icon = document.getElementById('theme-icon');
-  if (icon) icon.className = saved === 'dark' ? 'bi bi-moon-fill' : 'bi bi-sun-fill';
+  if (icon) icon.className = saved === 'light' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
 })();
 
 document.getElementById('theme-toggle')?.addEventListener('click', function() {
