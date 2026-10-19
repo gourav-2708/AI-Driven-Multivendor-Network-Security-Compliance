@@ -1,153 +1,224 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
-{% block page_title %}Compliance Audit Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
 
 {% if not binary_exists %}
-<div class="alert-banner alert-danger mb-4">
-  <i class="bi bi-exclamation-triangle-fill"></i>
+<div class="alert-banner alert-danger" role="alert">
+  <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
   <div><strong>Auditor engine not found.</strong> Run <code>make</code> in the project root to build it.</div>
 </div>
 {% endif %}
 
-<!-- ── Hero banner ─────────────────────────────────────────── -->
-<div class="hero-banner mb-5">
-  <div class="hero-left">
-    <div class="hero-tag"><i class="bi bi-stars me-1"></i> AI-Powered Analysis</div>
-    <h1 class="hero-title">Multi-Vendor Network<br><span class="hero-accent">Security Compliance Auditor</span></h1>
-    <p class="hero-sub">Upload your Cisco, Juniper or Fortinet configuration files and get an instant compliance score with detailed findings and remediation guidance.</p>
-    <div class="hero-stats">
-      <div class="hero-stat"><span class="hero-stat-num">17</span><span class="hero-stat-lbl">Security Rules</span></div>
-      <div class="hero-stat-div"></div>
-      <div class="hero-stat"><span class="hero-stat-num">3</span><span class="hero-stat-lbl">Vendors</span></div>
-      <div class="hero-stat-div"></div>
-      <div class="hero-stat"><span class="hero-stat-num">4</span><span class="hero-stat-lbl">Severity Levels</span></div>
+<!-- Hero -->
+<div class="hero-compact">
+  <h1 class="hero-title">
+    Multi-Vendor Network <span class="hero-accent">Security Auditor</span>
+  </h1>
+  <p class="hero-sub">Upload Cisco, Juniper or Fortinet configs for an instant compliance score with detailed findings.</p>
+</div>
+
+<!-- Stat mini cards -->
+<div class="stat-cards-row" role="list" aria-label="System statistics">
+  <div class="stat-mini" role="listitem">
+    <div class="stat-mini-icon" aria-hidden="true"><i class="bi bi-check2-all"></i></div>
+    <div>
+      <div class="stat-mini-val">17</div>
+      <div class="stat-mini-lbl">Security Rules</div>
     </div>
   </div>
-  <div class="hero-right">
-    <div class="hero-shield">
-      <i class="bi bi-shield-check"></i>
-      <div class="hero-shield-ring ring-1"></div>
-      <div class="hero-shield-ring ring-2"></div>
-      <div class="hero-shield-ring ring-3"></div>
+  <div class="stat-mini" role="listitem">
+    <div class="stat-mini-icon" aria-hidden="true"><i class="bi bi-diagram-3"></i></div>
+    <div>
+      <div class="stat-mini-val">3</div>
+      <div class="stat-mini-lbl">Vendors</div>
+    </div>
+  </div>
+  <div class="stat-mini" role="listitem">
+    <div class="stat-mini-icon" aria-hidden="true"><i class="bi bi-layers"></i></div>
+    <div>
+      <div class="stat-mini-val">4</div>
+      <div class="stat-mini-lbl">Severity Levels</div>
     </div>
   </div>
 </div>
 
-<!-- ── Main Row ─────────────────────────────────────────────── -->
-<div class="row g-4 mb-4">
+<!-- Main grid -->
+<div class="audit-grid">
 
   <!-- Upload card -->
-  <div class="col-lg-7">
-    <div class="pro-card h-100">
-      <div class="pro-card-header">
-        <i class="bi bi-cloud-upload"></i>
-        <span>Upload Configuration Files</span>
+  <div class="pro-card">
+    <div class="pro-card-header">
+      <i class="bi bi-cloud-upload" aria-hidden="true"></i>
+      <span>Upload Configuration Files</span>
+    </div>
+    <div class="pro-card-body" style="padding:0">
+      <div id="drop-zone" class="drop-zone" role="button" tabindex="0"
+           aria-label="Drop configuration files here or press Enter to browse"
+           aria-describedby="drop-sub-text">
+        <div class="drop-icon" aria-hidden="true"><i class="bi bi-file-earmark-code"></i></div>
+        <p class="drop-title">Drag &amp; drop config files here</p>
+        <p class="drop-sub" id="drop-sub-text">
+          Supports
+          <span class="ext-badge" aria-label="CFG files">.cfg</span>
+          <span class="ext-badge" aria-label="CONF files">.conf</span>
+          <span class="ext-badge" aria-label="TXT files">.txt</span>
+          &mdash; Cisco &bull; Juniper &bull; Fortinet
+        </p>
+        <label class="btn-browse" role="button" tabindex="0"
+               aria-label="Browse files from your computer">
+          <i class="bi bi-folder2-open" aria-hidden="true"></i>
+          Browse Files
+          <input type="file" id="file-input" multiple accept=".cfg,.conf,.txt,.log" hidden
+                 aria-label="Select configuration files">
+        </label>
       </div>
-      <div class="pro-card-body">
-        <div id="drop-zone" class="drop-zone">
-          <div class="drop-icon"><i class="bi bi-file-earmark-code"></i></div>
-          <p class="drop-title">Drag &amp; drop config files here</p>
-          <p class="drop-sub">Supports <span class="ext-tag">.cfg</span> <span class="ext-tag">.conf</span> <span class="ext-tag">.txt</span> &mdash; Cisco &bull; Juniper &bull; Fortinet</p>
-          <label class="btn-browse">
-            <i class="bi bi-folder2-open me-2"></i>Browse Files
-            <input type="file" id="file-input" multiple accept=".cfg,.conf,.txt,.log" hidden>
-          </label>
-        </div>
 
-        <!-- File list -->
-        <div id="file-list" class="file-list mt-3 d-none">
-          <div class="file-list-header">
-            <span><i class="bi bi-paperclip me-1"></i>Selected Files</span>
-            <button class="btn-clear" id="clear-files"><i class="bi bi-x-circle me-1"></i>Clear All</button>
-          </div>
-          <ul id="file-items" class="list-unstyled mb-0 mt-2"></ul>
+      <!-- File chips (shown after selection) -->
+      <div id="file-list" class="d-none" aria-live="polite" aria-label="Selected files">
+        <div class="file-chips-header">
+          <span><i class="bi bi-paperclip" aria-hidden="true"></i> Selected Files</span>
+          <button class="btn-clear-all" id="clear-files" aria-label="Remove all selected files">
+            <i class="bi bi-x-circle" aria-hidden="true"></i> Clear All
+          </button>
         </div>
+        <div class="file-chips-area" id="file-items" aria-label="Uploaded files"></div>
       </div>
     </div>
   </div>
 
-  <!-- Options card -->
-  <div class="col-lg-5">
-    <div class="pro-card h-100">
-      <div class="pro-card-header">
-        <i class="bi bi-sliders2"></i>
-        <span>Audit Configuration</span>
-      </div>
-      <div class="pro-card-body d-flex flex-column gap-4">
+  <!-- Config card -->
+  <div class="pro-card">
+    <div class="pro-card-header">
+      <i class="bi bi-sliders2" aria-hidden="true"></i>
+      <span>Audit Configuration</span>
+    </div>
+    <div class="config-body">
 
-        <div>
-          <label class="opt-label">VENDOR DETECTION</label>
-          <select class="opt-select" id="vendor-select">
-            <option value="auto" selected>&#9889; Auto-detect (Recommended)</option>
-            <option value="cisco">&#128260; Cisco IOS / IOS-XE</option>
-            <option value="juniper">&#128279; Juniper JunOS</option>
-            <option value="fortinet">&#128274; Fortinet FortiOS</option>
+      <!-- Vendor -->
+      <div class="opt-group">
+        <label class="opt-label" for="vendor-select">Vendor Detection</label>
+        <div class="select-wrap">
+          <select class="opt-select" id="vendor-select" aria-label="Select vendor for detection">
+            <option value="auto">&#9889; Auto-detect (Recommended)</option>
+            <option value="cisco">Cisco IOS / IOS-XE</option>
+            <option value="juniper">Juniper JunOS</option>
+            <option value="fortinet">Fortinet FortiOS</option>
           </select>
+          <i class="bi bi-chevron-down select-arrow" aria-hidden="true"></i>
         </div>
+      </div>
 
-        <div>
-          <label class="opt-label">MINIMUM SEVERITY FILTER</label>
-          <div class="sev-buttons" id="severity-group">
-            <input type="radio" class="sev-radio" name="severity" id="sev-low" value="low" checked>
-            <label class="sev-btn sev-all" for="sev-low"><i class="bi bi-funnel me-1"></i>All</label>
-
-            <input type="radio" class="sev-radio" name="severity" id="sev-medium" value="medium">
-            <label class="sev-btn sev-med" for="sev-medium">Medium+</label>
-
-            <input type="radio" class="sev-radio" name="severity" id="sev-high" value="high">
-            <label class="sev-btn sev-high" for="sev-high">High+</label>
-
-            <input type="radio" class="sev-radio" name="severity" id="sev-critical" value="critical">
-            <label class="sev-btn sev-crit" for="sev-critical">Critical</label>
-          </div>
+      <!-- Severity -->
+      <div class="opt-group" role="group" aria-labelledby="sev-label">
+        <div class="opt-label" id="sev-label">Minimum Severity</div>
+        <div class="sev-segment" id="severity-group" role="radiogroup" aria-label="Minimum severity filter">
+          <input type="radio" class="sev-radio" name="severity" id="sev-low" value="low" checked>
+          <label class="sev-btn sev-all" for="sev-low" title="Show all findings">
+            <span class="sev-dot" aria-hidden="true"></span>All
+          </label>
+          <input type="radio" class="sev-radio" name="severity" id="sev-medium" value="medium">
+          <label class="sev-btn sev-med" for="sev-medium" title="Medium severity and above">
+            <span class="sev-dot" aria-hidden="true"></span>Med+
+          </label>
+          <input type="radio" class="sev-radio" name="severity" id="sev-high" value="high">
+          <label class="sev-btn sev-high" for="sev-high" title="High severity and above">
+            <span class="sev-dot" aria-hidden="true"></span>High+
+          </label>
+          <input type="radio" class="sev-radio" name="severity" id="sev-critical" value="critical">
+          <label class="sev-btn sev-crit" for="sev-critical" title="Critical only">
+            <span class="sev-dot" aria-hidden="true"></span>Crit
+          </label>
         </div>
+      </div>
 
-        <!-- Feature chips -->
-        <div class="feature-chips">
-          <div class="chip"><i class="bi bi-shield-lock me-1"></i>Auth Rules</div>
-          <div class="chip"><i class="bi bi-wifi me-1"></i>SNMP Check</div>
-          <div class="chip"><i class="bi bi-journal-text me-1"></i>Logging</div>
-          <div class="chip"><i class="bi bi-clock me-1"></i>NTP Audit</div>
-          <div class="chip"><i class="bi bi-list-check me-1"></i>ACL Review</div>
-          <div class="chip"><i class="bi bi-ethernet me-1"></i>Interface</div>
-        </div>
-
-        <div class="mt-auto">
-          <button class="btn-run" id="run-btn" disabled>
-            <i class="bi bi-play-fill me-2"></i>Run Security Audit
+      <!-- Category chips -->
+      <div class="opt-group">
+        <div class="opt-label">Rule Categories</div>
+        <div class="feature-chips" id="category-chips" role="group" aria-label="Rule category filters">
+          <button class="chip chip-active" data-cat="auth" aria-pressed="true">
+            <i class="bi bi-shield-lock" aria-hidden="true"></i>Auth
+          </button>
+          <button class="chip chip-active" data-cat="snmp" aria-pressed="true">
+            <i class="bi bi-wifi" aria-hidden="true"></i>SNMP
+          </button>
+          <button class="chip chip-active" data-cat="log" aria-pressed="true">
+            <i class="bi bi-journal-text" aria-hidden="true"></i>Logging
+          </button>
+          <button class="chip chip-active" data-cat="ntp" aria-pressed="true">
+            <i class="bi bi-clock" aria-hidden="true"></i>NTP
+          </button>
+          <button class="chip chip-active" data-cat="acl" aria-pressed="true">
+            <i class="bi bi-list-check" aria-hidden="true"></i>ACL
+          </button>
+          <button class="chip chip-active" data-cat="intf" aria-pressed="true">
+            <i class="bi bi-ethernet" aria-hidden="true"></i>Interface
           </button>
         </div>
       </div>
+
+      <div class="run-btn-wrap">
+        <button class="btn-run" id="run-btn" disabled
+                aria-label="Run security audit on selected files"
+                aria-describedby="run-btn-hint">
+          <i class="bi bi-play-fill" aria-hidden="true"></i>
+          Run Security Audit
+        </button>
+        <p class="run-hint" id="run-btn-hint" aria-live="polite">Select files above to enable audit</p>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ── Recent audits ────────────────────────────────────────── -->
+<!-- Recent Audits -->
 <div class="pro-card">
   <div class="pro-card-header">
-    <i class="bi bi-clock-history"></i>
+    <i class="bi bi-clock-history" aria-hidden="true"></i>
     <span>Recent Audits</span>
-    <a href="/history" class="ms-auto btn-link-sm">View All <i class="bi bi-arrow-right"></i></a>
+    <a href="/history" class="ms-auto btn-link-sm" aria-label="View all audit history">
+      View All <i class="bi bi-arrow-right" aria-hidden="true"></i>
+    </a>
   </div>
-  <div class="pro-card-body" id="recent-audits">
-    <div class="empty-state">
-      <i class="bi bi-inbox"></i>
-      <p>No audits yet. Upload a config file to get started.</p>
+  <div class="pro-card-body" id="recent-audits" aria-live="polite" aria-label="Recent audit results">
+    <div id="recent-skeleton" aria-label="Loading recent audits">
+      <div class="skeleton-item"><div class="sk sk-score"></div><div class="sk-body"><div class="sk sk-line sk-w70"></div><div class="sk sk-line sk-w40 mt-1"></div></div></div>
+      <div class="skeleton-item"><div class="sk sk-score"></div><div class="sk-body"><div class="sk sk-line sk-w60"></div><div class="sk sk-line sk-w30 mt-1"></div></div></div>
+      <div class="skeleton-item"><div class="sk sk-score"></div><div class="sk-body"><div class="sk sk-line sk-w80"></div><div class="sk sk-line sk-w50 mt-1"></div></div></div>
+    </div>
+    <div id="recent-content" class="d-none"></div>
+    <div id="recent-empty" class="empty-state d-none" role="status">
+      <div class="empty-icon" aria-hidden="true"><i class="bi bi-inbox"></i></div>
+      <p>No audits yet.</p>
+      <p class="empty-sub">Upload a config file to get started.</p>
     </div>
   </div>
 </div>
 
 <!-- Progress overlay -->
-<div id="progress-overlay" class="progress-overlay d-none">
-  <div class="text-center">
-    <div class="progress-spinner">
+<div id="progress-overlay" class="progress-overlay d-none"
+     role="dialog" aria-modal="true" aria-label="Audit in progress" aria-live="polite">
+  <div class="progress-content">
+    <div class="progress-spinner" aria-hidden="true">
       <div class="spinner-ring"></div>
+      <div class="spinner-ring-2"></div>
       <i class="bi bi-shield-check progress-icon"></i>
     </div>
-    <p class="progress-title mt-4">Analyzing Configuration</p>
+    <p class="progress-title">Analyzing Configuration</p>
     <p class="progress-sub" id="progress-detail">Running 17 security rules...</p>
+    <div class="progress-steps" aria-hidden="true">
+      <div class="progress-step active" id="pstep-1">
+        <div class="pstep-dot"></div><span>Parsing</span>
+      </div>
+      <div class="pstep-line"></div>
+      <div class="progress-step" id="pstep-2">
+        <div class="pstep-dot"></div><span>Rules</span>
+      </div>
+      <div class="pstep-line"></div>
+      <div class="progress-step" id="pstep-3">
+        <div class="pstep-dot"></div><span>Report</span>
+      </div>
+    </div>
   </div>
 </div>
 

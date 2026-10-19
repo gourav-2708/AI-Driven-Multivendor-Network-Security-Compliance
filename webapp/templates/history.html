@@ -4,51 +4,74 @@
 
 {% block content %}
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <p class="text-muted mb-0">{{ entries|length }} past audit(s) stored</p>
-  <a href="/" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>New Audit</a>
+<div class="history-header mb-4">
+  <div class="history-header-left">
+    <h2 class="section-title">Audit History</h2>
+    <span class="history-count-badge" aria-label="{{ entries|length }} audit entries">
+      {{ entries|length }} entries
+    </span>
+  </div>
+  <a href="/" class="btn-primary-sm" aria-label="Start a new security audit">
+    <i class="bi bi-plus-lg" aria-hidden="true"></i> New Audit
+  </a>
 </div>
 
 {% if entries %}
-<div class="card">
-  <div class="table-responsive">
-    <table class="table table-dark table-hover align-middle mb-0">
+<div class="pro-card">
+  <div class="table-responsive-wrap">
+    <table class="data-table" aria-label="Audit history">
       <thead>
         <tr>
-          <th>Timestamp</th><th>Files</th><th>Vendor</th>
-          <th>Devices</th><th>Avg Score</th><th>Actions</th>
+          <th scope="col">Timestamp</th>
+          <th scope="col">Files</th>
+          <th scope="col">Vendor</th>
+          <th scope="col">Devices</th>
+          <th scope="col">Score</th>
+          <th scope="col"><span class="sr-only">Actions</span></th>
         </tr>
       </thead>
       <tbody>
         {% for e in entries %}
-        <tr>
-          <td><span class="text-muted small">{{ e.timestamp }}</span></td>
+        <tr class="history-row">
+          <td>
+            <span class="font-mono history-ts">{{ e.timestamp }}</span>
+          </td>
           <td>
             {% for f in e.files %}
-            <span class="badge bg-dark border me-1"><i class="bi bi-file-code me-1"></i>{{ f }}</span>
+            <span class="file-chip">
+              <i class="bi bi-file-code" aria-hidden="true"></i>
+              <span class="font-mono">{{ f }}</span>
+            </span>
             {% endfor %}
           </td>
-          <td><span class="badge bg-secondary">{{ e.vendor|upper }}</span></td>
+          <td>
+            <span class="vendor-badge">{{ e.vendor|upper }}</span>
+          </td>
           <td>{{ e.devices }}</td>
           <td>
-            <span class="fw-bold
-              {% if e.avg_score == '?' %}text-muted
-              {% elif e.avg_score >= 80 %}text-success
-              {% elif e.avg_score >= 50 %}text-warning
-              {% else %}text-danger{% endif %}">
+            <span class="score-text
+              {% if e.avg_score == '?' %}score-unknown
+              {% elif e.avg_score >= 80 %}score-good
+              {% elif e.avg_score >= 50 %}score-warn
+              {% else %}score-crit{% endif %}"
+              aria-label="Score: {{ e.avg_score }}{% if e.avg_score != '?' %} out of 100{% endif %}">
               {{ e.avg_score }}{% if e.avg_score != '?' %}/100{% endif %}
             </span>
           </td>
           <td>
-            <div class="btn-group btn-group-sm">
-              <a href="/results/{{ e.id }}" class="btn btn-outline-primary">
-                <i class="bi bi-eye"></i>
+            <div class="action-group" role="group" aria-label="Actions for audit {{ e.timestamp }}">
+              <a href="/results/{{ e.id }}" class="btn-action btn-view" aria-label="View audit results">
+                <i class="bi bi-eye" aria-hidden="true"></i>
+                <span class="btn-action-text">View</span>
               </a>
-              <a href="/api/download/{{ e.id }}/json" class="btn btn-outline-secondary">
-                <i class="bi bi-download"></i>
+              <a href="/api/download/{{ e.id }}/json" class="btn-action btn-dl"
+                 aria-label="Download JSON report">
+                <i class="bi bi-download" aria-hidden="true"></i>
               </a>
-              <button class="btn btn-outline-danger" onclick="deleteEntry('{{ e.id }}', this)">
-                <i class="bi bi-trash"></i>
+              <button class="btn-action btn-del"
+                      onclick="deleteEntry('{{ e.id }}', this)"
+                      aria-label="Delete audit entry from {{ e.timestamp }}">
+                <i class="bi bi-trash" aria-hidden="true"></i>
               </button>
             </div>
           </td>
@@ -58,11 +81,15 @@
     </table>
   </div>
 </div>
+
 {% else %}
-<div class="text-center py-5">
-  <i class="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
-  <p class="text-muted">No audit history yet.</p>
-  <a href="/" class="btn btn-primary">Run your first audit</a>
+<div class="empty-state history-empty" role="status" aria-live="polite">
+  <div class="empty-icon" aria-hidden="true"><i class="bi bi-clock-history"></i></div>
+  <p class="empty-title">No audit history yet</p>
+  <p class="empty-sub">Run your first security audit to see results here.</p>
+  <a href="/" class="btn-primary-sm mt-3">
+    <i class="bi bi-play-fill" aria-hidden="true"></i> Run First Audit
+  </a>
 </div>
 {% endif %}
 
@@ -71,9 +98,19 @@
 {% block scripts %}
 <script>
 async function deleteEntry(id, btn) {
-  if (!confirm('Delete this audit entry?')) return;
-  await fetch('/api/result/' + id, { method: 'DELETE' });
-  btn.closest('tr').remove();
+  if (!confirm('Delete this audit entry? This cannot be undone.')) return;
+  btn.disabled = true;
+  try {
+    await fetch('/api/result/' + id, { method: 'DELETE' });
+    const row = btn.closest('tr');
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(20px)';
+    row.style.transition = 'all 0.2s ease';
+    setTimeout(() => row.remove(), 210);
+  } catch (e) {
+    btn.disabled = false;
+    alert('Failed to delete entry. Please try again.');
+  }
 }
 </script>
 {% endblock %}
