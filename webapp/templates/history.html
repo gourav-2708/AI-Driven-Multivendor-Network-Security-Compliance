@@ -1,96 +1,140 @@
 {% extends "base.html" %}
-{% block title %}History{% endblock %}
+{% block title %}Audit History{% endblock %}
 {% block page_title %}Audit History{% endblock %}
 
 {% block content %}
 
-<div class="history-header mb-4">
-  <div class="history-header-left">
-    <h2 class="section-title">Audit History</h2>
-    <span class="history-count-badge" aria-label="{{ entries|length }} audit entries">
+<!-- Header row -->
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <h2 style="font-family:'Space Grotesk',sans-serif;font-size:1.1rem;font-weight:700;color:var(--text-hi);margin:0;">
+      Audit History
+    </h2>
+    {% if entries %}
+    <span style="background:var(--accent-glow);border:1px solid rgba(6,182,212,.3);color:var(--accent-hi);
+                 border-radius:20px;padding:2px 10px;font-size:.7rem;font-weight:700;"
+          aria-label="{{ entries|length }} audit entries">
       {{ entries|length }} entries
     </span>
+    {% endif %}
   </div>
-  <a href="/" class="btn-primary-sm" aria-label="Start a new security audit">
+  <a href="/" style="display:inline-flex;align-items:center;gap:6px;
+     background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;text-decoration:none;
+     border-radius:var(--r-md);padding:8px 16px;font-size:.82rem;font-weight:600;
+     box-shadow:0 3px 12px rgba(6,182,212,.28);transition:all .2s;"
+     aria-label="Start a new security audit">
     <i class="bi bi-plus-lg" aria-hidden="true"></i> New Audit
   </a>
 </div>
 
 {% if entries %}
+
 <div class="pro-card">
-  <div class="table-responsive-wrap">
-    <table class="data-table" aria-label="Audit history">
-      <thead>
-        <tr>
-          <th scope="col">Timestamp</th>
-          <th scope="col">Files</th>
-          <th scope="col">Vendor</th>
-          <th scope="col">Devices</th>
-          <th scope="col">Score</th>
-          <th scope="col"><span class="sr-only">Actions</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for e in entries %}
-        <tr class="history-row">
-          <td>
-            <span class="font-mono history-ts">{{ e.timestamp }}</span>
-          </td>
-          <td>
-            {% for f in e.files %}
-            <span class="file-chip">
-              <i class="bi bi-file-code" aria-hidden="true"></i>
-              <span class="font-mono">{{ f }}</span>
-            </span>
-            {% endfor %}
-          </td>
-          <td>
-            <span class="vendor-badge">{{ e.vendor|upper }}</span>
-          </td>
-          <td>{{ e.devices }}</td>
-          <td>
-            <span class="score-text
-              {% if e.avg_score == '?' %}score-unknown
-              {% elif e.avg_score >= 80 %}score-good
-              {% elif e.avg_score >= 50 %}score-warn
-              {% else %}score-crit{% endif %}"
-              aria-label="Score: {{ e.avg_score }}{% if e.avg_score != '?' %} out of 100{% endif %}">
-              {{ e.avg_score }}{% if e.avg_score != '?' %}/100{% endif %}
-            </span>
-          </td>
-          <td>
-            <div class="action-group" role="group" aria-label="Actions for audit {{ e.timestamp }}">
-              <a href="/results/{{ e.id }}" class="btn-action btn-view" aria-label="View audit results">
-                <i class="bi bi-eye" aria-hidden="true"></i>
-                <span class="btn-action-text">View</span>
-              </a>
-              <a href="/api/download/{{ e.id }}/json" class="btn-action btn-dl"
-                 aria-label="Download JSON report">
-                <i class="bi bi-download" aria-hidden="true"></i>
-              </a>
-              <button class="btn-action btn-del"
-                      onclick="deleteEntry('{{ e.id }}', this)"
-                      aria-label="Delete audit entry from {{ e.timestamp }}">
-                <i class="bi bi-trash" aria-hidden="true"></i>
-              </button>
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="pro-card-header">
+    <i class="bi bi-clock-history" aria-hidden="true"></i>
+    <span>All Audits</span>
+    <span style="margin-left:auto;font-size:.75rem;font-weight:400;color:var(--text-muted)">
+      Newest first
+    </span>
+  </div>
+  <div style="padding:0" role="list" aria-label="Audit history entries">
+    {% for e in entries %}
+    <div class="history-item" role="listitem">
+
+      <!-- Score badge -->
+      <div class="history-score
+        {% if e.avg_score == '?' %}
+          style="border-color:var(--border-hi)"
+        {% elif e.avg_score >= 80 %}
+          style="border-color:rgba(52,211,153,.4)"
+        {% elif e.avg_score >= 50 %}
+          style="border-color:rgba(251,191,36,.4)"
+        {% else %}
+          style="border-color:rgba(248,113,113,.4)"
+        {% endif %}"
+        aria-label="Score: {{ e.avg_score }}{% if e.avg_score != '?' %} out of 100{% endif %}">
+        <span class="history-score-val
+          {% if e.avg_score == '?' %}
+          {% elif e.avg_score >= 80 %}text-good
+          {% elif e.avg_score >= 50 %}text-med
+          {% else %}text-crit{% endif %}">
+          {{ e.avg_score }}
+        </span>
+        <span class="history-score-lbl">/100</span>
+      </div>
+
+      <!-- Meta -->
+      <div class="history-meta">
+        <div class="history-files">
+          {% for f in e.files %}
+          <span style="font-family:'JetBrains Mono',monospace;font-size:.78rem;">{{ f }}{% if not loop.last %}, {% endif %}</span>
+          {% endfor %}
+        </div>
+        <div class="history-detail">
+          <i class="bi bi-clock" aria-hidden="true"></i> {{ e.timestamp }}
+          &nbsp;&middot;&nbsp;
+          <span class="vendor-badge">{{ e.vendor|upper }}</span>
+          &nbsp;&middot;&nbsp;
+          {{ e.devices }} device{{ 's' if e.devices != 1 else '' }}
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="history-badges">
+        <a href="/results/{{ e.id }}"
+           style="display:inline-flex;align-items:center;gap:5px;background:var(--surface3);
+                  border:1px solid var(--border-hi);color:var(--text);text-decoration:none;
+                  border-radius:var(--r-sm);padding:5px 10px;font-size:.75rem;font-weight:600;transition:all .18s;"
+           aria-label="View audit results from {{ e.timestamp }}"
+           onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent-hi)'"
+           onmouseout="this.style.borderColor='';this.style.color=''">
+          <i class="bi bi-eye" aria-hidden="true"></i> View
+        </a>
+        <a href="/api/download/{{ e.id }}/json"
+           style="display:inline-flex;align-items:center;justify-content:center;
+                  width:30px;height:30px;background:var(--surface3);
+                  border:1px solid var(--border-hi);color:var(--text-muted);
+                  border-radius:var(--r-sm);text-decoration:none;font-size:.9rem;transition:all .18s;"
+           aria-label="Download JSON report for audit from {{ e.timestamp }}"
+           title="Download JSON"
+           onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+           onmouseout="this.style.borderColor='';this.style.color=''">
+          <i class="bi bi-download" aria-hidden="true"></i>
+        </a>
+        <button class="btn-del"
+                onclick="deleteEntry('{{ e.id }}', this)"
+                aria-label="Delete audit entry from {{ e.timestamp }}"
+                title="Delete">
+          <i class="bi bi-trash" aria-hidden="true"></i>
+        </button>
+      </div>
+
+    </div>
+    {% endfor %}
   </div>
 </div>
 
 {% else %}
-<div class="empty-state history-empty" role="status" aria-live="polite">
-  <div class="empty-icon" aria-hidden="true"><i class="bi bi-clock-history"></i></div>
-  <p class="empty-title">No audit history yet</p>
+
+<div class="empty-state" role="status" aria-live="polite"
+     style="padding:60px 20px;">
+  <div class="empty-icon" aria-hidden="true"
+       style="font-size:3rem;margin-bottom:14px;opacity:.4;">
+    <i class="bi bi-clock-history"></i>
+  </div>
+  <p style="font-size:1rem;font-weight:700;color:var(--text-hi);margin-bottom:6px;">
+    No audit history yet
+  </p>
   <p class="empty-sub">Run your first security audit to see results here.</p>
-  <a href="/" class="btn-primary-sm mt-3">
+  <a href="/"
+     style="display:inline-flex;align-items:center;gap:7px;margin-top:20px;
+            background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;
+            text-decoration:none;border-radius:var(--r-md);padding:10px 20px;
+            font-size:.85rem;font-weight:600;box-shadow:0 4px 14px rgba(6,182,212,.3);">
     <i class="bi bi-play-fill" aria-hidden="true"></i> Run First Audit
   </a>
 </div>
+
 {% endif %}
 
 {% endblock %}
@@ -101,15 +145,18 @@ async function deleteEntry(id, btn) {
   if (!confirm('Delete this audit entry? This cannot be undone.')) return;
   btn.disabled = true;
   try {
-    await fetch('/api/result/' + id, { method: 'DELETE' });
-    const row = btn.closest('tr');
-    row.style.opacity = '0';
-    row.style.transform = 'translateX(20px)';
-    row.style.transition = 'all 0.2s ease';
-    setTimeout(() => row.remove(), 210);
-  } catch (e) {
+    const r = await fetch('/api/result/' + id, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Server error');
+    const item = btn.closest('.history-item');
+    if (item) {
+      item.style.transition = 'opacity .2s, transform .2s';
+      item.style.opacity    = '0';
+      item.style.transform  = 'translateX(20px)';
+      setTimeout(() => item.remove(), 220);
+    }
+  } catch(e) {
     btn.disabled = false;
-    alert('Failed to delete entry. Please try again.');
+    alert('Failed to delete. Please try again.');
   }
 }
 </script>

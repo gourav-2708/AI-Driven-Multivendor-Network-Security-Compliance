@@ -140,6 +140,12 @@ def api_delete(aid):
     if p.exists(): p.unlink()
     return jsonify({"ok": True})
 
+
+
+@app.route("/api/export/<aid>")
+def api_export(aid):
+    return api_download(aid, "json")
+
 if __name__ == "__main__":
     print(f"Binary: {BINARY} ({chr(70)+chr(79)+chr(85)+chr(78)+chr(68) if BINARY.exists() else chr(77)+chr(73)+chr(83)+chr(83)+chr(73)+chr(78)+chr(71)})")
     print("Open: http://localhost:5000")
