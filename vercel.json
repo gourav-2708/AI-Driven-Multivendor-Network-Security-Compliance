@@ -5,8 +5,8 @@
   "functions": {
     "index.py": {
       "maxDuration": 30,
-      "includeFiles": "{build/release/net-audit,frontends/web/app.py,frontends/web/templates/**}",
-      "excludeFiles": "{src/**,include/**,tests/**,docs/**,examples/**,public/**,scripts/**,build/release/obj/**,build/debug/**,frontends/desktop/**,frontends/viewer/**,frontends/web/static/**,frontends/web/history/**,frontends/web/uploads/**,**/__pycache__/**}"
+      "includeFiles": "{build/release/net-audit,frontends/web/app.py,frontends/web/templates/**,frontends/web/static/**}",
+      "excludeFiles": "{src/**,include/**,tests/**,docs/**,examples/**,public/**,scripts/**,build/release/obj/**,build/debug/**,frontends/desktop/**,frontends/viewer/**,frontends/web/history/**,frontends/web/uploads/**,**/__pycache__/**}"
     }
   },
   "headers": [

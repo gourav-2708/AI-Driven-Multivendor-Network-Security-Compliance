@@ -5,7 +5,9 @@
 #  1. compile the C auditor to build/release/net-audit
 #  2. self-test it (unit + regression suite) before shipping
 #  3. copy the web UI's static assets to public/static so
-#     Vercel's CDN serves them instead of the Python function
+#     Vercel's CDN can serve them; they are also bundled into
+#     the Python function (vercel.json includeFiles) so Flask
+#     serves /static/* whenever the CDN copy is not picked up
 #
 # Safe to run locally on Linux/macOS to reproduce the build.
 # ============================================================
