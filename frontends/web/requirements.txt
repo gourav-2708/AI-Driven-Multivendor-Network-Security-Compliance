@@ -1,0 +1,2 @@
+# Local development dependencies (same as pyproject.toml)
+Flask>=3.1,<4

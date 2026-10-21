@@ -1,0 +1,926 @@
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : core-router-01
+  Vendor  : cisco
+  Version : 15.7
+  Source  : tests/fixtures\cisco_sample.cfg
+----------------------------------------------------------------------------
+  Compliance Score : 2 / 100
+  Total Findings   : 18  (Critical:5  High:7  Medium:4  Low:2)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  FAIL
+  Access Control (ACL)                FAIL
+  SNMP                                FAIL
+  Services (SVC)                      FAIL
+  Logging (LOG)                       FAIL
+  Time Sync (NTP)                     FAIL
+  Interfaces (INTF)                   FAIL
+
+-- Findings --
+
+  [AUTH-001] Privileged password stored in plaintext or reversible form, with no hashed secret (CRITICAL)
+  Section     : auth / enable password
+  Remediation : Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration.
+
+  [AUTH-002] AAA (Authentication, Authorization, Accounting) not configured (HIGH)
+  Section     : auth / aaa
+  Remediation : Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).
+
+  [AUTH-003] Telnet permitted for device management (cleartext credentials) (HIGH)
+  Section     : management access / telnet
+  Remediation : Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).
+
+  [AUTH-004] SSH not enabled; no encrypted management access configured (HIGH)
+  Section     : management access / ssh
+  Remediation : Enable SSHv2: 'ip ssh version 2' and 'crypto key generate rsa modulus 4096' (IOS), 'system services ssh' (JunOS), 'ssh' in allowaccess (FortiOS). Then restrict management to SSH.
+
+  [PASSWD-001] Passwords stored in plaintext: password encryption is not enabled (CRITICAL)
+  Section     : service password-encryption
+  Remediation : Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'INSECURE_ACL' entry 1 (line 68)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [ACL-002] Management interface has no inbound ACL applied (HIGH)
+  Section     : interface 'GigabitEthernet0/2'
+  Remediation : Apply an inbound ACL/filter to every management interface that admits only known management hosts and the required protocols (SSH, SNMP, HTTPS).
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'public' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'private' (read-write)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'public'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'private'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SVC-001] Plain-text HTTP management access is enabled (HIGH)
+  Section     : management access / http
+  Remediation : Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate.
+
+  [SVC-002] CDP (Cisco Discovery Protocol) enabled globally (MEDIUM)
+  Section     : service / cdp run
+  Remediation : Run 'no cdp run', or at least 'no cdp enable' on every external and untrusted interface. CDP discloses platform, version and addressing.
+
+  [SVC-003] TCP/UDP small servers enabled (echo, chargen, discard, daytime) (MEDIUM)
+  Section     : service tcp-small-servers / udp-small-servers
+  Remediation : Disable with 'no service tcp-small-servers' and 'no service udp-small-servers'. These services are obsolete and can be abused for amplification attacks.
+
+  [LOG-001] No remote syslog server configured (MEDIUM)
+  Section     : logging
+  Remediation : Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response.
+
+  [LOG-002] Buffered (local) logging not enabled (LOW)
+  Section     : logging buffered
+  Remediation : Enable a local log buffer ('logging buffered 65536 informational'; JunOS 'syslog file'; FortiOS memory/disk logging) as a fallback when the collector is unreachable.
+
+  [NTP-001] NTP not configured; device clock may be unsynchronised (MEDIUM)
+  Section     : ntp
+  Remediation : Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'GigabitEthernet0/3'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : FortiGate-Branch
+  Vendor  : fortinet
+  Version : n/a
+  Source  : tests/fixtures\fortinet_sample.conf
+----------------------------------------------------------------------------
+  Compliance Score : 6 / 100
+  Total Findings   : 13  (Critical:4  High:5  Medium:2  Low:2)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  FAIL
+  Access Control (ACL)                FAIL
+  SNMP                                FAIL
+  Services (SVC)                      FAIL
+  Logging (LOG)                       FAIL
+  Time Sync (NTP)                     FAIL
+  Interfaces (INTF)                   FAIL
+
+-- Findings --
+
+  [AUTH-001] Privileged password stored in plaintext or reversible form, with no hashed secret (CRITICAL)
+  Section     : auth / enable password
+  Remediation : Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration.
+
+  [AUTH-002] AAA (Authentication, Authorization, Accounting) not configured (HIGH)
+  Section     : auth / aaa
+  Remediation : Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).
+
+  [AUTH-003] Telnet permitted for device management (cleartext credentials) (HIGH)
+  Section     : management access / telnet
+  Remediation : Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).
+
+  [PASSWD-001] Passwords stored in plaintext: password encryption is not enabled (CRITICAL)
+  Section     : service password-encryption
+  Remediation : Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'policy 1 (Allow_All_Outbound)' entry 1 (line 69)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [ACL-002] Management interface has no inbound ACL applied (HIGH)
+  Section     : interface 'mgmt'
+  Remediation : Apply an inbound ACL/filter to every management interface that admits only known management hosts and the required protocols (SSH, SNMP, HTTPS).
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'public' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'public'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SVC-001] Plain-text HTTP management access is enabled (HIGH)
+  Section     : management access / http
+  Remediation : Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate.
+
+  [LOG-001] No remote syslog server configured (MEDIUM)
+  Section     : logging
+  Remediation : Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response.
+
+  [LOG-002] Buffered (local) logging not enabled (LOW)
+  Section     : logging buffered
+  Remediation : Enable a local log buffer ('logging buffered 65536 informational'; JunOS 'syslog file'; FortiOS memory/disk logging) as a fallback when the collector is unreachable.
+
+  [NTP-001] NTP not configured; device clock may be unsynchronised (MEDIUM)
+  Section     : ntp
+  Remediation : Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'dmz'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : edge-router-jnpr
+  Vendor  : juniper
+  Version : 21.4R3
+  Source  : tests/fixtures\juniper_sample.conf
+----------------------------------------------------------------------------
+  Compliance Score : 7 / 100
+  Total Findings   : 13  (Critical:5  High:5  Medium:2  Low:1)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  FAIL
+  Access Control (ACL)                FAIL
+  SNMP                                FAIL
+  Services (SVC)                      FAIL
+  Logging (LOG)                       FAIL
+  Time Sync (NTP)                     FAIL
+  Interfaces (INTF)                   FAIL
+
+-- Findings --
+
+  [AUTH-001] Privileged password stored in plaintext or reversible form, with no hashed secret (CRITICAL)
+  Section     : auth / enable password
+  Remediation : Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration.
+
+  [AUTH-003] Telnet permitted for device management (cleartext credentials) (HIGH)
+  Section     : management access / telnet
+  Remediation : Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).
+
+  [PASSWD-001] Passwords stored in plaintext: password encryption is not enabled (CRITICAL)
+  Section     : service password-encryption
+  Remediation : Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'WAN_FILTER' entry 2 (line 102)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [ACL-002] Management interface has no inbound ACL applied (HIGH)
+  Section     : interface 'me0'
+  Remediation : Apply an inbound ACL/filter to every management interface that admits only known management hosts and the required protocols (SSH, SNMP, HTTPS).
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'public' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'private' (read-write)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'public'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'private'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SVC-001] Plain-text HTTP management access is enabled (HIGH)
+  Section     : management access / http
+  Remediation : Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate.
+
+  [LOG-001] No remote syslog server configured (MEDIUM)
+  Section     : logging
+  Remediation : Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response.
+
+  [NTP-001] NTP not configured; device clock may be unsynchronised (MEDIUM)
+  Section     : ntp
+  Remediation : Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'ge-0/0/2'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : branch-firewall-secure
+  Vendor  : cisco
+  Version : 15.7
+  Source  : tests/fixtures\test_01_cisco_secure.cfg
+----------------------------------------------------------------------------
+  Compliance Score : 100 / 100
+  Total Findings   : 0  (Critical:0  High:0  Medium:0  Low:0)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               PASS
+  Passwords (PASSWD)                  PASS
+  Access Control (ACL)                PASS
+  SNMP                                PASS
+  Services (SVC)                      PASS
+  Logging (LOG)                       PASS
+  Time Sync (NTP)                     PASS
+  Interfaces (INTF)                   PASS
+
+-- Findings --
+  No findings. Device is fully compliant.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : legacy-core-router
+  Vendor  : cisco
+  Version : 12.4
+  Source  : tests/fixtures\test_02_cisco_critical.cfg
+----------------------------------------------------------------------------
+  Compliance Score : 1 / 100
+  Total Findings   : 25  (Critical:9  High:9  Medium:4  Low:3)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  FAIL
+  Access Control (ACL)                FAIL
+  SNMP                                FAIL
+  Services (SVC)                      FAIL
+  Logging (LOG)                       FAIL
+  Time Sync (NTP)                     FAIL
+  Interfaces (INTF)                   FAIL
+
+-- Findings --
+
+  [AUTH-001] Privileged password stored in plaintext or reversible form, with no hashed secret (CRITICAL)
+  Section     : auth / enable password
+  Remediation : Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration.
+
+  [AUTH-002] AAA (Authentication, Authorization, Accounting) not configured (HIGH)
+  Section     : auth / aaa
+  Remediation : Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).
+
+  [AUTH-003] Telnet permitted for device management (cleartext credentials) (HIGH)
+  Section     : management access / telnet
+  Remediation : Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).
+
+  [AUTH-004] SSH not enabled; no encrypted management access configured (HIGH)
+  Section     : management access / ssh
+  Remediation : Enable SSHv2: 'ip ssh version 2' and 'crypto key generate rsa modulus 4096' (IOS), 'system services ssh' (JunOS), 'ssh' in allowaccess (FortiOS). Then restrict management to SSH.
+
+  [PASSWD-001] Passwords stored in plaintext: password encryption is not enabled (CRITICAL)
+  Section     : service password-encryption
+  Remediation : Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'OPEN_ACL' entry 1 (line 56)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'ALSO_OPEN' entry 1 (line 59)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'ALSO_OPEN' entry 2 (line 60)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [ACL-002] Management interface has no inbound ACL applied (HIGH)
+  Section     : interface 'FastEthernet0/4'
+  Remediation : Apply an inbound ACL/filter to every management interface that admits only known management hosts and the required protocols (SSH, SNMP, HTTPS).
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'public' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'private' (read-write)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'read' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'write' (read-write)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'public'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'private'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'read'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'write'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SVC-001] Plain-text HTTP management access is enabled (HIGH)
+  Section     : management access / http
+  Remediation : Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate.
+
+  [SVC-002] CDP (Cisco Discovery Protocol) enabled globally (MEDIUM)
+  Section     : service / cdp run
+  Remediation : Run 'no cdp run', or at least 'no cdp enable' on every external and untrusted interface. CDP discloses platform, version and addressing.
+
+  [SVC-003] TCP/UDP small servers enabled (echo, chargen, discard, daytime) (MEDIUM)
+  Section     : service tcp-small-servers / udp-small-servers
+  Remediation : Disable with 'no service tcp-small-servers' and 'no service udp-small-servers'. These services are obsolete and can be abused for amplification attacks.
+
+  [LOG-001] No remote syslog server configured (MEDIUM)
+  Section     : logging
+  Remediation : Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response.
+
+  [LOG-002] Buffered (local) logging not enabled (LOW)
+  Section     : logging buffered
+  Remediation : Enable a local log buffer ('logging buffered 65536 informational'; JunOS 'syslog file'; FortiOS memory/disk logging) as a fallback when the collector is unreachable.
+
+  [NTP-001] NTP not configured; device clock may be unsynchronised (MEDIUM)
+  Section     : ntp
+  Remediation : Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'FastEthernet0/2'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'FastEthernet0/3'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : campus-distribution-sw
+  Vendor  : cisco
+  Version : 15.2
+  Source  : tests/fixtures\test_03_cisco_medium.cfg
+----------------------------------------------------------------------------
+  Compliance Score : 40 / 100
+  Total Findings   : 10  (Critical:2  High:5  Medium:1  Low:2)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  PASS
+  Access Control (ACL)                PASS
+  SNMP                                FAIL
+  Services (SVC)                      FAIL
+  Logging (LOG)                       PASS
+  Time Sync (NTP)                     FAIL
+  Interfaces (INTF)                   FAIL
+
+-- Findings --
+
+  [AUTH-003] Telnet permitted for device management (cleartext credentials) (HIGH)
+  Section     : management access / telnet
+  Remediation : Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).
+
+  [AUTH-004] SSH not enabled; no encrypted management access configured (HIGH)
+  Section     : management access / ssh
+  Remediation : Enable SSHv2: 'ip ssh version 2' and 'crypto key generate rsa modulus 4096' (IOS), 'system services ssh' (JunOS), 'ssh' in allowaccess (FortiOS). Then restrict management to SSH.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'co***' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'co***' (read-write)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'co***'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'co***'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SVC-001] Plain-text HTTP management access is enabled (HIGH)
+  Section     : management access / http
+  Remediation : Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate.
+
+  [SVC-002] CDP (Cisco Discovery Protocol) enabled globally (MEDIUM)
+  Section     : service / cdp run
+  Remediation : Run 'no cdp run', or at least 'no cdp enable' on every external and untrusted interface. CDP discloses platform, version and addressing.
+
+  [NTP-002] NTP configured without authentication (LOW)
+  Section     : ntp authenticate
+  Remediation : Enable NTP authentication with trusted keys ('ntp authenticate', 'ntp authentication-key', 'ntp trusted-key'). Unauthenticated NTP responses can be spoofed.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'GigabitEthernet1/0/24'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : isp-edge-router
+  Vendor  : cisco
+  Version : 15.4
+  Source  : tests/fixtures\test_04_cisco_poor.cfg
+----------------------------------------------------------------------------
+  Compliance Score : 1 / 100
+  Total Findings   : 14  (Critical:4  High:4  Medium:3  Low:3)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  FAIL
+  Access Control (ACL)                FAIL
+  SNMP                                FAIL
+  Services (SVC)                      FAIL
+  Logging (LOG)                       FAIL
+  Time Sync (NTP)                     FAIL
+  Interfaces (INTF)                   FAIL
+
+-- Findings --
+
+  [AUTH-001] Privileged password stored in plaintext or reversible form, with no hashed secret (CRITICAL)
+  Section     : auth / enable password
+  Remediation : Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration.
+
+  [AUTH-002] AAA (Authentication, Authorization, Accounting) not configured (HIGH)
+  Section     : auth / aaa
+  Remediation : Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).
+
+  [PASSWD-001] Passwords stored in plaintext: password encryption is not enabled (CRITICAL)
+  Section     : service password-encryption
+  Remediation : Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'WAN_IN' entry 1 (line 60)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [ACL-002] Management interface has no inbound ACL applied (HIGH)
+  Section     : interface 'GigabitEthernet0/5'
+  Remediation : Apply an inbound ACL/filter to every management interface that admits only known management hosts and the required protocols (SSH, SNMP, HTTPS).
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'public' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'public'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SVC-001] Plain-text HTTP management access is enabled (HIGH)
+  Section     : management access / http
+  Remediation : Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate.
+
+  [SVC-002] CDP (Cisco Discovery Protocol) enabled globally (MEDIUM)
+  Section     : service / cdp run
+  Remediation : Run 'no cdp run', or at least 'no cdp enable' on every external and untrusted interface. CDP discloses platform, version and addressing.
+
+  [LOG-001] No remote syslog server configured (MEDIUM)
+  Section     : logging
+  Remediation : Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response.
+
+  [LOG-002] Buffered (local) logging not enabled (LOW)
+  Section     : logging buffered
+  Remediation : Enable a local log buffer ('logging buffered 65536 informational'; JunOS 'syslog file'; FortiOS memory/disk logging) as a fallback when the collector is unreachable.
+
+  [NTP-001] NTP not configured; device clock may be unsynchronised (MEDIUM)
+  Section     : ntp
+  Remediation : Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'GigabitEthernet0/3'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'GigabitEthernet0/4'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : juniper-srx-secure
+  Vendor  : juniper
+  Version : n/a
+  Source  : tests/fixtures\test_05_juniper_secure.conf
+----------------------------------------------------------------------------
+  Compliance Score : 77 / 100
+  Total Findings   : 2  (Critical:1  High:1  Medium:0  Low:0)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  PASS
+  Access Control (ACL)                FAIL
+  SNMP                                PASS
+  Services (SVC)                      PASS
+  Logging (LOG)                       PASS
+  Time Sync (NTP)                     PASS
+  Interfaces (INTF)                   PASS
+
+-- Findings --
+
+  [AUTH-002] AAA (Authentication, Authorization, Accounting) not configured (HIGH)
+  Section     : auth / aaa
+  Remediation : Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'policy allow-outbound' entry 1 (line 93)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : juniper-legacy-router
+  Vendor  : juniper
+  Version : n/a
+  Source  : tests/fixtures\test_06_juniper_critical.conf
+----------------------------------------------------------------------------
+  Compliance Score : 7 / 100
+  Total Findings   : 16  (Critical:7  High:6  Medium:2  Low:1)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  FAIL
+  Access Control (ACL)                FAIL
+  SNMP                                FAIL
+  Services (SVC)                      PASS
+  Logging (LOG)                       FAIL
+  Time Sync (NTP)                     FAIL
+  Interfaces (INTF)                   FAIL
+
+-- Findings --
+
+  [AUTH-001] Privileged password stored in plaintext or reversible form, with no hashed secret (CRITICAL)
+  Section     : auth / enable password
+  Remediation : Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration.
+
+  [AUTH-002] AAA (Authentication, Authorization, Accounting) not configured (HIGH)
+  Section     : auth / aaa
+  Remediation : Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).
+
+  [AUTH-003] Telnet permitted for device management (cleartext credentials) (HIGH)
+  Section     : management access / telnet
+  Remediation : Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).
+
+  [AUTH-004] SSH not enabled; no encrypted management access configured (HIGH)
+  Section     : management access / ssh
+  Remediation : Enable SSHv2: 'ip ssh version 2' and 'crypto key generate rsa modulus 4096' (IOS), 'system services ssh' (JunOS), 'ssh' in allowaccess (FortiOS). Then restrict management to SSH.
+
+  [PASSWD-001] Passwords stored in plaintext: password encryption is not enabled (CRITICAL)
+  Section     : service password-encryption
+  Remediation : Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'policy permit-all' entry 1 (line 68)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'policy permit-all' entry 2 (line 80)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'public' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'private' (read-write)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'read' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'public'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'private'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'read'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [LOG-001] No remote syslog server configured (MEDIUM)
+  Section     : logging
+  Remediation : Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response.
+
+  [NTP-001] NTP not configured; device clock may be unsynchronised (MEDIUM)
+  Section     : ntp
+  Remediation : Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'ge-0/0/2'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : juniper-mx-datacenter
+  Vendor  : juniper
+  Version : n/a
+  Source  : tests/fixtures\test_07_juniper_medium.conf
+----------------------------------------------------------------------------
+  Compliance Score : 45 / 100
+  Total Findings   : 7  (Critical:2  High:4  Medium:0  Low:1)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  PASS
+  Access Control (ACL)                PASS
+  SNMP                                FAIL
+  Services (SVC)                      PASS
+  Logging (LOG)                       PASS
+  Time Sync (NTP)                     FAIL
+  Interfaces (INTF)                   PASS
+
+-- Findings --
+
+  [AUTH-002] AAA (Authentication, Authorization, Accounting) not configured (HIGH)
+  Section     : auth / aaa
+  Remediation : Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).
+
+  [AUTH-003] Telnet permitted for device management (cleartext credentials) (HIGH)
+  Section     : management access / telnet
+  Remediation : Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'da***' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'dc***' (read-write)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'da***'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'dc***'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [NTP-002] NTP configured without authentication (LOW)
+  Section     : ntp authenticate
+  Remediation : Enable NTP authentication with trusted keys ('ntp authenticate', 'ntp authentication-key', 'ntp trusted-key'). Unauthenticated NTP responses can be spoofed.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : fortinet-fg-secure
+  Vendor  : fortinet
+  Version : n/a
+  Source  : tests/fixtures\test_08_fortinet_secure.conf
+----------------------------------------------------------------------------
+  Compliance Score : 85 / 100
+  Total Findings   : 1  (Critical:1  High:0  Medium:0  Low:0)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               PASS
+  Passwords (PASSWD)                  PASS
+  Access Control (ACL)                FAIL
+  SNMP                                PASS
+  Services (SVC)                      PASS
+  Logging (LOG)                       PASS
+  Time Sync (NTP)                     PASS
+  Interfaces (INTF)                   PASS
+
+-- Findings --
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'policy 1 (LAN-to-WAN)' entry 1 (line 109)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : fortinet-fg-critical
+  Vendor  : fortinet
+  Version : n/a
+  Source  : tests/fixtures\test_09_fortinet_critical.conf
+----------------------------------------------------------------------------
+  Compliance Score : 4 / 100
+  Total Findings   : 17  (Critical:5  High:5  Medium:2  Low:5)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  FAIL
+  Access Control (ACL)                FAIL
+  SNMP                                FAIL
+  Services (SVC)                      FAIL
+  Logging (LOG)                       FAIL
+  Time Sync (NTP)                     FAIL
+  Interfaces (INTF)                   FAIL
+
+-- Findings --
+
+  [AUTH-001] Privileged password stored in plaintext or reversible form, with no hashed secret (CRITICAL)
+  Section     : auth / enable password
+  Remediation : Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration.
+
+  [AUTH-002] AAA (Authentication, Authorization, Accounting) not configured (HIGH)
+  Section     : auth / aaa
+  Remediation : Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).
+
+  [AUTH-003] Telnet permitted for device management (cleartext credentials) (HIGH)
+  Section     : management access / telnet
+  Remediation : Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).
+
+  [PASSWD-001] Passwords stored in plaintext: password encryption is not enabled (CRITICAL)
+  Section     : service password-encryption
+  Remediation : Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'policy 1 (Allow-Everything)' entry 1 (line 85)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'public' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'private' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'public'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'private'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SVC-001] Plain-text HTTP management access is enabled (HIGH)
+  Section     : management access / http
+  Remediation : Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate.
+
+  [LOG-001] No remote syslog server configured (MEDIUM)
+  Section     : logging
+  Remediation : Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response.
+
+  [LOG-002] Buffered (local) logging not enabled (LOW)
+  Section     : logging buffered
+  Remediation : Enable a local log buffer ('logging buffered 65536 informational'; JunOS 'syslog file'; FortiOS memory/disk logging) as a fallback when the collector is unreachable.
+
+  [NTP-001] NTP not configured; device clock may be unsynchronised (MEDIUM)
+  Section     : ntp
+  Remediation : Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'wan2'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'dmz'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'port5'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'port6'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+============================================================================
+
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : fortinet-branch-medium
+  Vendor  : fortinet
+  Version : n/a
+  Source  : tests/fixtures\test_10_fortinet_medium.conf
+----------------------------------------------------------------------------
+  Compliance Score : 14 / 100
+  Total Findings   : 11  (Critical:5  High:4  Medium:0  Low:2)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  FAIL
+  Access Control (ACL)                FAIL
+  SNMP                                FAIL
+  Services (SVC)                      FAIL
+  Logging (LOG)                       FAIL
+  Time Sync (NTP)                     FAIL
+  Interfaces (INTF)                   PASS
+
+-- Findings --
+
+  [AUTH-001] Privileged password stored in plaintext or reversible form, with no hashed secret (CRITICAL)
+  Section     : auth / enable password
+  Remediation : Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration.
+
+  [AUTH-002] AAA (Authentication, Authorization, Accounting) not configured (HIGH)
+  Section     : auth / aaa
+  Remediation : Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).
+
+  [AUTH-003] Telnet permitted for device management (cleartext credentials) (HIGH)
+  Section     : management access / telnet
+  Remediation : Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).
+
+  [PASSWD-001] Passwords stored in plaintext: password encryption is not enabled (CRITICAL)
+  Section     : service password-encryption
+  Remediation : Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'policy 1 (LAN-to-Internet)' entry 1 (line 76)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'policy 2 (Allow-Inbound-All)' entry 1 (line 88)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'public' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'public'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SVC-001] Plain-text HTTP management access is enabled (HIGH)
+  Section     : management access / http
+  Remediation : Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate.
+
+  [LOG-002] Buffered (local) logging not enabled (LOW)
+  Section     : logging buffered
+  Remediation : Enable a local log buffer ('logging buffered 65536 informational'; JunOS 'syslog file'; FortiOS memory/disk logging) as a fallback when the collector is unreachable.
+
+  [NTP-002] NTP configured without authentication (LOW)
+  Section     : ntp authenticate
+  Remediation : Enable NTP authentication with trusted keys ('ntp authenticate', 'ntp authentication-key', 'ntp trusted-key'). Unauthenticated NTP responses can be spoofed.
+============================================================================
+
+============================================================================
+  NET-AUDIT FLEET SUMMARY
+============================================================================
+  Devices audited             : 13
+  Fleet Compliance Score (avg): 29 / 100
+  Total Findings              : 147  (Critical:50  High:55  Medium:20  Low:22)
+
+-- Per-Device Summary --
+  Hostname                       Vendor      Score  CRIT  HIGH   MED   LOW
+----------------------------------------------------------------------------
+  core-router-01                 cisco       2/100     5     7     4     2
+  FortiGate-Branch               fortinet    6/100     4     5     2     2
+  edge-router-jnpr               juniper     7/100     5     5     2     1
+  branch-firewall-secure         cisco     100/100     0     0     0     0
+  legacy-core-router             cisco       1/100     9     9     4     3
+  campus-distribution-sw         cisco      40/100     2     5     1     2
+  isp-edge-router                cisco       1/100     4     4     3     3
+  juniper-srx-secure             juniper    77/100     1     1     0     0
+  juniper-legacy-router          juniper     7/100     7     6     2     1
+  juniper-mx-datacenter          juniper    45/100     2     4     0     1
+  fortinet-fg-secure             fortinet   85/100     1     0     0     0
+  fortinet-fg-critical           fortinet    4/100     5     5     2     5
+  fortinet-branch-medium         fortinet   14/100     5     4     0     2
+============================================================================
+

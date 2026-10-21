@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% from "_macros.html" import score_class, verdict, arrow %}
+{% block title %}Audit{% endblock %}
+{% block nav_class %}{% endblock %}
+
+{% block content %}
+<!-- ============================== HERO ============================== -->
+<section class="hero">
+  <div class="wrap">
+    <div class="hero-copy">
+      <p class="eyebrow">Network compliance auditing</p>
+      <h1 class="display">Audit every config.<br><span class="accent">Stay in control.</span></h1>
+      <p class="lede">Cisco, Juniper and Fortinet configurations checked against 17 security rules. Scored, explained and fixed in seconds.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#audit">Start an audit {{ arrow() }}</a>
+        <a class="link-u" href="{{ url_for('history_page') }}">View audit history</a>
+      </div>
+    </div>
+
+    <div class="hero-art" aria-hidden="true">
+      <svg class="swirl" viewBox="0 0 600 520" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stop-color="#5b8cff" stop-opacity="0"/>
+            <stop offset=".5" stop-color="#7cc4ff"/>
+            <stop offset="1" stop-color="#2f6bff" stop-opacity="0"/>
+          </linearGradient>
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <g fill="none" stroke="url(#g1)" filter="url(#glow)">
+          <ellipse cx="300" cy="230" rx="250" ry="92" stroke-width="1.6" transform="rotate(-18 300 230)"/>
+          <ellipse cx="300" cy="230" rx="236" ry="80" stroke-width="1.1" transform="rotate(-14 300 230)"/>
+          <ellipse cx="300" cy="230" rx="222" ry="104" stroke-width=".9" transform="rotate(-22 300 230)"/>
+          <ellipse cx="300" cy="230" rx="262" ry="70" stroke-width="1.3" transform="rotate(-10 300 230)"/>
+          <ellipse cx="300" cy="230" rx="206" ry="118" stroke-width=".7" transform="rotate(-26 300 230)"/>
+          <ellipse cx="300" cy="230" rx="244" ry="60" stroke-width="2" transform="rotate(-16 300 230)"/>
+        </g>
+      </svg>
+
+      <div class="preview">
+        {% set latest = recent[0] if recent else none %}
+        <div class="preview-head">
+          <span class="eyebrow" style="font-size:11px">{{ 'Latest audit' if latest else 'Rule coverage' }}</span>
+          {% if latest and not latest.error %}<span class="eyebrow white" style="font-size:11px">{{ verdict(latest.avg_score) }}</span>{% endif %}
+        </div>
+        {% if latest and not latest.error %}
+          <div class="preview-score">{{ latest.avg_score }}<small> / 100</small></div>
+          <div style="margin-top:14px">
+            <div class="preview-row">Files<b style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ latest.files|join(', ') }}</b></div>
+            <div class="preview-row">Devices<b>{{ latest.devices }}</b></div>
+            <div class="preview-row">Audited<b>{{ latest.timestamp }}</b></div>
+          </div>
+        {% else %}
+          <div class="preview-score">17<small> rules</small></div>
+          <div style="margin-top:14px">
+            {% for c, n in [('Authentication', 4), ('Access control', 2), ('SNMP', 2), ('Services', 3), ('Logging · NTP · Interfaces', 5)] %}
+            <div class="preview-row">{{ c }}<b>{{ n }}</b></div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== RECENT ============================ -->
+{% if recent %}
+<section class="strip" aria-labelledby="recent-title">
+  <div class="wrap">
+    <div class="strip-head">
+      <h2 class="eyebrow white" id="recent-title">Recent audits</h2>
+      <div class="strip-nav">
+        <button class="icon-btn" type="button" data-rail="-1" aria-label="Scroll recent audits left">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2L4 7l5 5"/></svg>
+        </button>
+        <button class="icon-btn" type="button" data-rail="1" aria-label="Scroll recent audits right">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 2l5 5-5 5"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="rail" id="rail">
+      {% for e in recent %}
+      <a class="rail-item" href="{{ url_for('results_page', aid=e.id) }}">
+        <span class="rail-thumb {{ score_class(e.avg_score) if not e.error else 'bad' }}">{{ '!' if e.error else e.avg_score }}</span>
+        <span>
+          <span class="rail-title">{{ e.files|join(', ') }}</span>
+          <span class="rail-meta" style="display:block">{{ 'Failed' if e.error else (e.devices ~ ' device' ~ ('' if e.devices == 1 else 's')) }} · {{ e.timestamp[:10] }}</span>
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- ============================== AUDIT ============================= -->
+<section class="section dots" id="audit" aria-labelledby="audit-title">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Run an audit</p>
+        <h2 class="headline" id="audit-title">Drop your device configs.<br><span class="accent">Get a verdict in seconds.</span></h2>
+      </div>
+    </div>
+
+    {% if not binary_exists %}
+    <div class="notice" role="alert">The auditor engine is not built yet. Run <code>make</code> in the repository root, then reload this page.</div>
+    {% endif %}
+    <div id="error" class="notice" role="alert" hidden></div>
+
+    <form id="audit-form" class="panel reveal" novalidate data-max-bytes="{{ max_upload_bytes }}">
+      <label id="drop" class="drop" for="file-input">
+        <span class="drop-icon" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        </span>
+        <span class="drop-title">Drop files here or <span>browse</span></span>
+        <span class="muted small">.cfg · .conf · .txt — add several files for a fleet report · up to {{ (max_upload_bytes / 1048576)|int }} MB</span>
+        <input id="file-input" type="file" multiple accept=".cfg,.conf,.txt,.log" hidden>
+      </label>
+
+      <ul id="files" class="files" aria-live="polite" hidden></ul>
+
+      <div class="controls">
+        <div class="field">
+          <label class="label" for="vendor">Vendor</label>
+          <select id="vendor" name="vendor">
+            <option value="auto">Auto-detect</option>
+            <option value="cisco">Cisco IOS</option>
+            <option value="juniper">Juniper JunOS</option>
+            <option value="fortinet">Fortinet FortiOS</option>
+          </select>
+        </div>
+        <div class="field">
+          <span class="label" id="sev-label">Report findings</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="sev-label">
+            <input type="radio" name="severity" id="sev-low" value="low" checked><label for="sev-low">All</label>
+            <input type="radio" name="severity" id="sev-medium" value="medium"><label for="sev-medium">Medium+</label>
+            <input type="radio" name="severity" id="sev-high" value="high"><label for="sev-high">High+</label>
+            <input type="radio" name="severity" id="sev-critical" value="critical"><label for="sev-critical">Critical</label>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <button id="run" class="btn btn-primary" type="submit" disabled>Run audit {{ arrow() }}</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- ============================== STATS ============================= -->
+<section class="section dots" style="padding-top:20px" aria-labelledby="why-title">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">Why net-audit</p>
+        <h2 class="headline" id="why-title">One deterministic engine for every vendor.<br><span class="accent">Same rules, same score, every time.</span></h2>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card reveal">
+        <div class="stat-num">17</div>
+        <div class="stat-title">security rules across 8 categories</div>
+        <p class="stat-text">Authentication, passwords, ACLs, SNMP, services, logging, NTP and interface hygiene.</p>
+      </div>
+      <div class="stat-card reveal">
+        <div class="stat-num">3</div>
+        <div class="stat-title">vendor syntaxes, auto-detected</div>
+        <p class="stat-text">Cisco IOS, Juniper JunOS and Fortinet FortiOS normalised into one model, so every rule applies everywhere.</p>
+      </div>
+      <div class="stat-card reveal">
+        <div class="stat-num">0 <small>bytes</small></div>
+        <div class="stat-title">of heap memory used</div>
+        <p class="stat-text">A hardened C11 core with bounded buffers and sanitizer-tested parsers. No cloud calls, no external services.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="busy" class="overlay" role="dialog" aria-modal="true" aria-labelledby="busy-title" hidden>
+  <div style="text-align:center">
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="eyebrow" style="margin-bottom:10px">Auditing</p>
+    <p id="busy-title" class="headline" style="font-size:28px">Running 17 security rules</p>
+    <p id="busy-detail" class="muted" style="margin-top:8px"></p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% endblock %}

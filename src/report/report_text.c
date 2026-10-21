@@ -1,181 +1,151 @@
 ﻿/**
  * @file report_text.c
- * @brief Human-readable plain-text (ANSI colour) compliance report formatter.
+ * @brief Human-readable report with optional ANSI colour.
  */
+#include "netaudit/safe_str.h"
+#include "report_internal.h"
 
-#include <stdio.h>
-#include <string.h>
-#include "report.h"
-#include "model.h"
-#include "common.h"
+#define RULE_WIDTH 76
 
-#define RESET  "\033[0m"
-#define BOLD   "\033[1m"
-#define GREEN  "\033[0;32m"
-#define CYAN   "\033[0;36m"
-#define WHITE  "\033[1;37m"
+#define C_RESET  "\033[0m"
+#define C_BOLD   "\033[1m"
+#define C_GREEN  "\033[0;32m"
+#define C_YELLOW "\033[0;33m"
+#define C_RED    "\033[0;31m"
+#define C_CYAN   "\033[0;36m"
+#define C_WHITE  "\033[1;37m"
 
-static const char *clr(const ReportOptions *o, const char *code)
+static const char *clr(const ReportSession *s, const char *code)
 {
-    return o->color ? code : "";
+    return s->opts.color ? code : "";
 }
 
-static void print_rule(char rule, FILE *fp,
-                       const ReportOptions *o)
+static const char *score_color(int score)
 {
-    fprintf(fp, "%s%c%s", clr(o,CYAN), rule, clr(o,RESET));
-    for (int i = 0; i < 74; i++) fputc(rule, fp);
-    fprintf(fp, "%s%c%s\n", clr(o,CYAN), rule, clr(o,RESET));
+    return score >= 80 ? C_GREEN : score >= 50 ? C_YELLOW : C_RED;
 }
 
-static void print_header(const char *title, FILE *fp, const ReportOptions *o)
+static void hr(const ReportSession *s, char ch)
 {
-    print_rule('=', fp, o);
-    fprintf(fp, "  %s%s%s\n", clr(o,BOLD), title, clr(o,RESET));
-    print_rule('=', fp, o);
+    FILE *fp = s->opts.out;
+    fputs(clr(s, C_CYAN), fp);
+    for (int i = 0; i < RULE_WIDTH; i++) fputc(ch, fp);
+    fputs(clr(s, C_RESET), fp);
+    fputc('\n', fp);
 }
 
-static void print_section(const char *title, FILE *fp, const ReportOptions *o)
+static void banner(const ReportSession *s, const char *title)
 {
-    fprintf(fp, "\n%s-- %s --%s\n", clr(o,CYAN), title, clr(o,RESET));
+    hr(s, '=');
+    fprintf(s->opts.out, "  %s%s%s\n", clr(s, C_BOLD), title, clr(s, C_RESET));
+    hr(s, '=');
 }
 
-static const char *pass_fail(bool pass)
+static void heading(const ReportSession *s, const char *title)
 {
-    if (pass) return "\033[0;32mPASS\033[0m";
-    return "\033[0;31mFAIL\033[0m";
+    fprintf(s->opts.out, "\n%s-- %s --%s\n", clr(s, C_CYAN), title, clr(s, C_RESET));
 }
 
-int report_text_device(const AuditResult *r, const ReportOptions *o)
+static void category_summary(const ReportSession *s, const AuditResult *r)
 {
-    FILE *fp = o->output ? o->output : stdout;
+    heading(s, "Policy Category Summary");
+    for (int c = 0; c < CAT_COUNT; c++) {
+        bool failed = false;
+        for (int i = 0; i < r->finding_count && !failed; i++)
+            failed = r->findings[i].rule->category == (RuleCategory)c;
+
+        const char *title = rule_category_title((RuleCategory)c);
+        const char *code  = rule_category_code((RuleCategory)c);
+        char name[48];
+        if (str_eq_ci(title, code))
+            safe_strcpy(name, sizeof(name), title);
+        else
+            safe_snprintf(name, sizeof(name), "%s (%s)", title, code);
+        fprintf(s->opts.out, "  %-35s %s%s%s\n", name,
+                clr(s, failed ? C_RED : C_GREEN), failed ? "FAIL" : "PASS",
+                clr(s, C_RESET));
+    }
+}
+
+static void findings(const ReportSession *s, const AuditResult *r)
+{
+    FILE *fp = s->opts.out;
+    heading(s, "Findings");
+    if (r->finding_count == 0) {
+        fprintf(fp, "  %sNo findings. Device is fully compliant.%s\n",
+                clr(s, C_GREEN), clr(s, C_RESET));
+        return;
+    }
+    int shown = 0;
+    for (int i = 0; i < r->finding_count; i++) {
+        const Finding *f = &r->findings[i];
+        if (!report_shows(s, f)) continue;
+        shown++;
+        const char *sev = clr(s, severity_ansi(f->severity));
+        fprintf(fp, "\n  %s[%s] %s%s (%s)\n", sev, f->rule->id, f->description,
+                clr(s, C_RESET), severity_label(f->severity));
+        fprintf(fp, "  Section     : %s\n", f->section);
+        fprintf(fp, "  Remediation : %s\n", f->remediation);
+    }
+    if (shown == 0)
+        fprintf(fp, "  (all findings are below the minimum severity)\n");
+}
+
+static void text_device(ReportSession *s, const AuditResult *r, int index)
+{
+    FILE *fp = s->opts.out;
     const DeviceModel *d = r->device;
+    (void)index;
 
-    /* -- Device header ---------------------------------------------------- */
-    print_header("NET-AUDIT COMPLIANCE REPORT", fp, o);
-    fprintf(fp, "  Device  : %s%s%s\n", clr(o,WHITE), d->hostname[0] ? d->hostname : "(unknown)", clr(o,RESET));
+    banner(s, "NET-AUDIT COMPLIANCE REPORT");
+    fprintf(fp, "  Device  : %s%s%s\n", clr(s, C_WHITE), model_hostname(d), clr(s, C_RESET));
     fprintf(fp, "  Vendor  : %s\n", d->vendor);
     fprintf(fp, "  Version : %s\n", d->os_version[0] ? d->os_version : "n/a");
     fprintf(fp, "  Source  : %s\n", d->source_file);
-    print_rule('-', fp, o);
-
-    /* -- Score ------------------------------------------------------------ */
-    const char *score_color = (r->score >= 80) ? GREEN :
-                              (r->score >= 50) ? "\033[0;33m" : "\033[0;31m";
+    hr(s, '-');
     fprintf(fp, "  Compliance Score : %s%d / 100%s\n",
-            clr(o, score_color), r->score, clr(o,RESET));
-    fprintf(fp, "  Total Findings   : %d  "
-            "(Critical:%d  High:%d  Medium:%d  Low:%d)\n",
-            r->finding_count,
-            r->sev_counts[SEV_CRITICAL], r->sev_counts[SEV_HIGH],
-            r->sev_counts[SEV_MEDIUM],   r->sev_counts[SEV_LOW]);
+            clr(s, score_color(r->score)), r->score, clr(s, C_RESET));
+    fprintf(fp, "  Total Findings   : %d  (Critical:%d  High:%d  Medium:%d  Low:%d)\n",
+            r->finding_count, r->sev_counts[SEV_CRITICAL], r->sev_counts[SEV_HIGH],
+            r->sev_counts[SEV_MEDIUM], r->sev_counts[SEV_LOW]);
 
-    /* -- Category summary ------------------------------------------------- */
-    print_section("Policy Category Summary", fp, o);
-
-    typedef struct { const char *name; const char *prefixes[4]; } Cat;
-    Cat categories[] = {
-        { "Authentication (AUTH)",    {"AUTH-", NULL, NULL, NULL} },
-        { "Passwords (PASSWD)",       {"PASSWD-", NULL, NULL, NULL} },
-        { "Access Control (ACL)",     {"ACL-", NULL, NULL, NULL} },
-        { "SNMP",                     {"SNMP-", NULL, NULL, NULL} },
-        { "Services (SVC)",           {"SVC-", NULL, NULL, NULL} },
-        { "Logging (LOG)",            {"LOG-", NULL, NULL, NULL} },
-        { "NTP",                      {"NTP-", NULL, NULL, NULL} },
-        { "Interfaces (INTF)",        {"INTF-", NULL, NULL, NULL} },
-    };
-    int ncat = (int)(sizeof(categories)/sizeof(categories[0]));
-
-    for (int c = 0; c < ncat; c++) {
-        bool has_finding = false;
-        for (int i = 0; i < r->finding_count; i++) {
-            if (str_starts_with(r->findings[i].rule_id, categories[c].prefixes[0])) {
-                has_finding = true; break;
-            }
-        }
-        const char *pf = o->color ? pass_fail(!has_finding) :
-                         (has_finding ? "FAIL" : "PASS");
-        fprintf(fp, "  %-35s %s\n", categories[c].name, pf);
-    }
-
-    /* -- Findings --------------------------------------------------------- */
-    if (r->finding_count == 0) {
-        print_section("Findings", fp, o);
-        fprintf(fp, "  %sNo findings. Device is fully compliant.%s\n",
-                clr(o,GREEN), clr(o,RESET));
-    } else {
-        print_section("Findings", fp, o);
-        int shown = 0;
-        for (int i = 0; i < r->finding_count; i++) {
-            const Finding *f = &r->findings[i];
-            if (f->severity > o->min_severity) continue;
-            shown++;
-            fprintf(fp, "\n  %s[%s]%s %s%s%s (%s)\n",
-                    clr(o, SEVERITY_COLORS[f->severity]), f->rule_id,
-                    clr(o,RESET),
-                    clr(o, SEVERITY_COLORS[f->severity]), f->description,
-                    clr(o,RESET),
-                    SEVERITY_LABELS[f->severity]);
-            fprintf(fp, "  Section     : %s\n", f->affected_section);
-            fprintf(fp, "  Remediation : %s\n", f->remediation);
-        }
-        if (shown == 0)
-            fprintf(fp, "  (All findings filtered by minimum severity)\n");
-    }
-
-    print_rule('=', fp, o);
+    category_summary(s, r);
+    findings(s, r);
+    hr(s, '=');
     fputc('\n', fp);
-    return AUDIT_OK;
 }
 
-int report_text_aggregate(const AuditResult **rs, int n,
-                          const ReportOptions *o)
+static void text_end(ReportSession *s)
 {
-    FILE *fp = o->output ? o->output : stdout;
+    if (!s->fleet) return;
+    FILE *fp = s->opts.out;
+    int avg = report_average_score(s);
 
-    print_header("NET-AUDIT AGGREGATE COMPLIANCE SUMMARY", fp, o);
-    fprintf(fp, "  Devices audited: %d\n", n);
-
-    int total_findings = 0, total_score = 0;
-    int total_sev[SEV_COUNT] = {0};
-
-    for (int i = 0; i < n; i++) {
-        total_findings += rs[i]->finding_count;
-        total_score    += rs[i]->score;
-        for (int s = 0; s < SEV_COUNT; s++)
-            total_sev[s] += rs[i]->sev_counts[s];
-    }
-
-    int avg_score = (n > 0) ? total_score / n : 0;
-    const char *score_color = (avg_score >= 80) ? GREEN :
-                              (avg_score >= 50) ? "\033[0;33m" : "\033[0;31m";
+    banner(s, "NET-AUDIT FLEET SUMMARY");
+    fprintf(fp, "  Devices audited             : %d\n", s->device_count);
     fprintf(fp, "  Fleet Compliance Score (avg): %s%d / 100%s\n",
-            clr(o,score_color), avg_score, clr(o,RESET));
-    fprintf(fp, "  Total Findings: %d  "
-            "(Critical:%d  High:%d  Medium:%d  Low:%d)\n",
-            total_findings,
-            total_sev[SEV_CRITICAL], total_sev[SEV_HIGH],
-            total_sev[SEV_MEDIUM],   total_sev[SEV_LOW]);
+            clr(s, score_color(avg)), avg, clr(s, C_RESET));
+    fprintf(fp, "  Total Findings              : %d  (Critical:%d  High:%d  Medium:%d  Low:%d)\n",
+            s->finding_total, s->sev_totals[SEV_CRITICAL], s->sev_totals[SEV_HIGH],
+            s->sev_totals[SEV_MEDIUM], s->sev_totals[SEV_LOW]);
 
-    print_section("Per-Device Summary", fp, o);
-    fprintf(fp, "  %-30s %6s  %8s  %4s  %4s  %6s  %3s\n",
+    heading(s, "Per-Device Summary");
+    fprintf(fp, "  %-30s %-9s %7s  %4s  %4s  %4s  %4s\n",
             "Hostname", "Vendor", "Score", "CRIT", "HIGH", "MED", "LOW");
-    print_rule('-', fp, o);
-
-    for (int i = 0; i < n; i++) {
-        const AuditResult *r = rs[i];
-        const char *sc = (r->score >= 80) ? GREEN :
-                         (r->score >= 50) ? "\033[0;33m" : "\033[0;31m";
-        fprintf(fp, "  %-30s %-8s %s%3d/100%s  %4d  %4d  %6d  %3d\n",
-                r->device->hostname[0] ? r->device->hostname : "(unknown)",
-                r->device->vendor,
-                clr(o,sc), r->score, clr(o,RESET),
-                r->sev_counts[SEV_CRITICAL], r->sev_counts[SEV_HIGH],
-                r->sev_counts[SEV_MEDIUM],   r->sev_counts[SEV_LOW]);
+    hr(s, '-');
+    for (int i = 0; i < s->device_count; i++) {
+        const DeviceSummary *d = &s->devices[i];
+        fprintf(fp, "  %-30s %-9s %s%3d/100%s  %4d  %4d  %4d  %4d\n",
+                d->hostname, d->vendor, clr(s, score_color(d->score)), d->score,
+                clr(s, C_RESET), d->sev_counts[SEV_CRITICAL], d->sev_counts[SEV_HIGH],
+                d->sev_counts[SEV_MEDIUM], d->sev_counts[SEV_LOW]);
     }
-
-    print_rule('=', fp, o);
+    hr(s, '=');
     fputc('\n', fp);
-    return AUDIT_OK;
 }
 
+const ReportFormatOps REPORT_OPS_TEXT = {
+    .begin  = NULL,
+    .device = text_device,
+    .end    = text_end,
+};

@@ -30,3 +30,11 @@ Makefile text eol=lf
 # Binaries
 *.exe binary
 *.o   binary
+
+# Shell scripts
+*.sh   text eol=lf
+*.yml  text eol=lf
+
+# Byte-exact fixture: exercises BOM + CRLF handling, must not be normalised
+tests/fixtures/edge/ios_bom_crlf.cfg -text
+examples/*.csv -text

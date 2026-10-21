@@ -1,106 +1,157 @@
-# ===========================================================================
-# net-audit Makefile  (Windows/MinGW + Linux/GCC compatible)
-# ===========================================================================
-# Targets:
-#   make          - release build
-#   make debug    - debug build (ASan/UBSan on Linux; debug symbols on MinGW)
-#   make test     - build and run all tests
-#   make clean    - remove build artefacts
-# ===========================================================================
+# =============================================================================
+# net-audit - build system (GNU make; Linux, macOS, Windows/MinGW)
+# =============================================================================
+#   make              release build        -> build/release/net-audit
+#   make debug        debug build          -> build/debug/net-audit
+#                     (ASan + UBSan where the toolchain supports them)
+#   make test         build and run the unit + regression suite
+#   make check        test + run the CLI over every fixture
+#   make valgrind     run the test suite under valgrind (Linux)
+#   make examples     regenerate the sample reports in examples/
+#   make docs         Doxygen HTML into build/docs (needs doxygen)
+#   make install      install the binary (POSIX; PREFIX=/usr/local)
+#   make clean        remove build/
+#
+# Variables: CC, MODE=release|debug, SANITIZE=0|1, EXTRA_CFLAGS, PREFIX
+# =============================================================================
 
-CC      = gcc
-CFLAGS  = -std=c11 -Wall -Wextra -Werror -pedantic -Iinclude
-LDFLAGS =
-
-RELEASE_FLAGS = -O2 -DNDEBUG
-
-# ASan/UBSan available on Linux GCC; skip on MinGW which lacks libasan
-ifeq ($(OS),Windows_NT)
-    DEBUG_FLAGS = -g -O0
-else
-    DEBUG_FLAGS = -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer
-    LDFLAGS_DEBUG = -fsanitize=address,undefined
+MODE     ?= release
+PREFIX   ?= /usr/local
+ifeq ($(origin CC),default)
+  CC := gcc
 endif
 
-EXT =
+# ---- Platform / shell detection ---------------------------------------------
+# On Windows, GNU make runs recipes with sh.exe when one is on PATH (Git for
+# Windows, MSYS) and with cmd.exe otherwise. `echo "x"` keeps its quotes only
+# under cmd, which tells us which command syntax to emit.
 ifeq ($(OS),Windows_NT)
-    EXT = .exe
-    MKDIR_P = if not exist $1 mkdir $1
+  EXE := .exe
+  ifeq ($(shell echo "x"),"x")
+    CMD_SHELL := 1
+  endif
 else
-    MKDIR_P = mkdir -p $1
+  EXE :=
 endif
 
-# Source files
-SRCS = src/main.c \
-       src/common/safe_str.c \
-       src/common/model_init.c \
-       src/parser/parser_registry.c \
-       src/parser/cisco_parser.c \
-       src/parser/juniper_parser.c \
-       src/parser/fortinet_parser.c \
-       src/engine/rule_engine.c \
-       src/engine/rules_table.c \
-       src/report/report.c \
-       src/report/report_text.c \
-       src/report/report_csv.c \
-       src/report/report_json.c
+ifdef CMD_SHELL
+  native = $(subst /,\,$1)
+  MKDIR  = if not exist $(call native,$1) mkdir $(call native,$1)
+  RMDIR  = if exist $(call native,$1) rd /s /q $(call native,$1)
+else
+  native = $1
+  MKDIR  = mkdir -p $1
+  RMDIR  = rm -rf $1
+endif
 
-# Object files: src/foo/bar.c -> build/foo/bar.o
-OBJS = $(patsubst src/%.c,build/%.o,$(SRCS))
+# ---- Flags -------------------------------------------------------------------
+CSTD     := -std=c11
+WARNINGS := -Wall -Wextra -Werror -pedantic -Wshadow -Wformat=2 \
+            -Wstrict-prototypes -Wmissing-prototypes -Wold-style-definition \
+            -Wpointer-arith -Wwrite-strings -Wundef
+CPPFLAGS := -Iinclude -MMD -MP
+CFLAGS   := $(CSTD) $(WARNINGS) $(EXTRA_CFLAGS)
+LDFLAGS  :=
+LDLIBS   :=
 
-TARGET = net-audit$(EXT)
+ifeq ($(OS),Windows_NT)
+  # C99-conformant printf family on MinGW (%zu etc.)
+  CPPFLAGS += -D__USE_MINGW_ANSI_STDIO=1
+endif
 
-# Library objects (exclude main) for test linking
-LIB_SRCS = $(filter-out src/main.c,$(SRCS))
-LIB_OBJS = $(patsubst src/%.c,build/%.o,$(LIB_SRCS))
+ifeq ($(MODE),debug)
+  CFLAGS += -O0 -g3 -fno-omit-frame-pointer
+  # MinGW ships no sanitizer runtime; enable elsewhere unless SANITIZE=0.
+  ifeq ($(OS),Windows_NT)
+    SANITIZE ?= 0
+  else
+    SANITIZE ?= 1
+  endif
+  ifeq ($(SANITIZE),1)
+    CFLAGS  += -fsanitize=address,undefined -fno-sanitize-recover=all
+    LDFLAGS += -fsanitize=address,undefined
+  endif
+else ifeq ($(MODE),release)
+  CFLAGS += -O2 -DNDEBUG
+else
+  $(error MODE must be 'release' or 'debug')
+endif
 
-TEST_PARSER = build/test_parser$(EXT)
-TEST_ENGINE = build/test_engine$(EXT)
+# ---- Sources -----------------------------------------------------------------
+BUILD    := build/$(MODE)
+SRC_DIRS := src/core src/platform src/parser src/engine src/report src/app
+LIB_SRCS := $(foreach d,$(SRC_DIRS),$(wildcard $(d)/*.c))
+APP_SRCS := src/main.c
+TST_SRCS := $(wildcard tests/*.c)
 
-.PHONY: all debug test clean
+LIB_OBJS := $(patsubst %.c,$(BUILD)/obj/%.o,$(LIB_SRCS))
+APP_OBJS := $(patsubst %.c,$(BUILD)/obj/%.o,$(APP_SRCS))
+TST_OBJS := $(patsubst %.c,$(BUILD)/obj/%.o,$(TST_SRCS))
+DEPS     := $(LIB_OBJS:.o=.d) $(APP_OBJS:.o=.d) $(TST_OBJS:.o=.d)
 
-# ---- Release ----------------------------------------------------------------
-all: build_dirs $(TARGET)
+BIN      := $(BUILD)/net-audit$(EXE)
+TEST_BIN := $(BUILD)/net-audit-tests$(EXE)
+FIXTURES := tests/fixtures
 
-$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(RELEASE_FLAGS) $^ -o $@
-	@echo Built: $@
+.PHONY: all release debug test check valgrind examples docs install clean help
+.DEFAULT_GOAL := all
 
-build/%.o: src/%.c
-	$(CC) $(CFLAGS) $(RELEASE_FLAGS) -c $< -o $@
+all: $(BIN)
 
-# ---- Debug ------------------------------------------------------------------
-debug: CFLAGS  += $(DEBUG_FLAGS)
-debug: LDFLAGS += $(LDFLAGS_DEBUG)
-debug: clean build_dirs $(TARGET)
-	@echo Debug build complete
+release:
+	$(MAKE) MODE=release all
 
-# ---- Tests ------------------------------------------------------------------
-test: build_dirs $(TEST_PARSER) $(TEST_ENGINE)
-	@echo === Parser Tests ===
-	$(TEST_PARSER)
-	@echo.
-	@echo === Engine Tests ===
-	$(TEST_ENGINE)
+debug:
+	$(MAKE) MODE=debug all
 
-$(TEST_PARSER): $(LIB_OBJS) build/test/test_parser.o build/test/test_runner.o
-	$(CC) $(CFLAGS) $(RELEASE_FLAGS) $^ -o $@
+$(BIN): $(LIB_OBJS) $(APP_OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+	@echo Built $@
 
-$(TEST_ENGINE): $(LIB_OBJS) build/test/test_engine.o build/test/test_runner.o
-	$(CC) $(CFLAGS) $(RELEASE_FLAGS) $^ -o $@
+$(TEST_BIN): $(LIB_OBJS) $(TST_OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
-build/test/%.o: tests/%.c
-	$(CC) $(CFLAGS) $(RELEASE_FLAGS) -Itests -c $< -o $@
+$(BUILD)/obj/%.o: %.c
+	@$(call MKDIR,$(@D))
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-# ---- Directory creation (Windows-compatible) ---------------------------------
-build_dirs:
-	-@if not exist build\common      mkdir build\common
-	-@if not exist build\parser      mkdir build\parser
-	-@if not exist build\engine      mkdir build\engine
-	-@if not exist build\report      mkdir build\report
-	-@if not exist build\test        mkdir build\test
+test: $(TEST_BIN)
+	$(call native,$(TEST_BIN)) $(FIXTURES)
 
-# ---- Clean ------------------------------------------------------------------
+check: test $(BIN)
+	$(call native,$(BIN)) --quiet --exit-zero --format json --dir $(FIXTURES) --output $(BUILD)/check.json
+	$(call native,$(BIN)) --quiet --exit-zero --format csv  --dir $(FIXTURES) --output $(BUILD)/check.csv
+	$(call native,$(BIN)) --quiet --exit-zero --no-color    --dir $(FIXTURES) --output $(BUILD)/check.txt
+	@echo CLI smoke run OK
+
+valgrind: $(TEST_BIN) $(BIN)
+	valgrind --error-exitcode=99 --leak-check=full --errors-for-leak-kinds=definite,indirect \
+	    $(TEST_BIN) $(FIXTURES)
+	valgrind --error-exitcode=99 --leak-check=full --errors-for-leak-kinds=definite,indirect \
+	    $(BIN) --quiet --format json --dir $(FIXTURES) > /dev/null; \
+	    test $$? -ne 99
+
+examples: $(BIN)
+	@$(call MKDIR,examples)
+	$(call native,$(BIN)) -q --exit-zero --no-color $(FIXTURES)/cisco_sample.cfg -o examples/report_cisco.txt
+	$(call native,$(BIN)) -q --exit-zero -f json $(FIXTURES)/cisco_sample.cfg -o examples/report_cisco.json
+	$(call native,$(BIN)) -q --exit-zero -f json $(FIXTURES)/juniper_sample.conf -o examples/report_juniper.json
+	$(call native,$(BIN)) -q --exit-zero -f json $(FIXTURES)/fortinet_sample.conf -o examples/report_fortinet.json
+	$(call native,$(BIN)) -q --exit-zero -f json --dir $(FIXTURES) -o examples/report_fleet.json
+	$(call native,$(BIN)) -q --exit-zero -f csv --dir $(FIXTURES) -o examples/report_fleet.csv
+	$(call native,$(BIN)) -q --exit-zero --no-color --dir $(FIXTURES) -o examples/report_fleet.txt
+
+docs:
+	doxygen docs/Doxyfile
+
+install: $(BIN)
+	install -d $(DESTDIR)$(PREFIX)/bin
+	install -m 0755 $(BIN) $(DESTDIR)$(PREFIX)/bin/net-audit
+
 clean:
-	-rd /s /q build 2>NUL
-	-del /q $(TARGET) 2>NUL
+	$(call RMDIR,build)
+
+help:
+	@echo Targets: all release debug test check valgrind examples docs install clean
+
+-include $(DEPS)

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "_macros.html" import sev_cards, findings, score_class, verdict, arrow %}
+{% set fleet = report.report_type == 'aggregate' %}
+{% set score = report.avg_score if fleet else report.score %}
+{% block title %}{{ 'Fleet audit' if fleet else (report.hostname or 'Audit result') }}{% endblock %}
+
+{% block content %}
+{% if report.error %}
+<section class="page-top">
+  <div class="wrap">
+    <p class="eyebrow">Audit failed</p>
+    <h1 class="spaced" style="color:var(--crit)">No result</h1>
+    <div class="notice" role="alert">{{ report.error }}</div>
+    <div class="meta-row"><span>{{ meta.files|join(', ') }}</span><span>{{ meta.timestamp }}</span></div>
+    <p style="margin-top:32px"><a class="btn btn-primary" href="{{ url_for('index') }}#audit">Try again {{ arrow() }}</a></p>
+  </div>
+</section>
+
+{% else %}
+<!-- ============================== HEADER ============================ -->
+<section class="page-top">
+  <div class="wrap">
+    <p class="eyebrow">{{ 'Fleet compliance report' if fleet else 'Compliance report' }}</p>
+    <h1 class="spaced">{{ 'Fleet audit' if fleet else report.hostname }}</h1>
+    <div class="meta-row">
+      {% if fleet %}<span>{{ report.devices_audited }} devices</span>
+      {% else %}<span>{{ report.vendor|title }}{% if report.version %} {{ report.version }}{% endif %}</span>
+      <span class="mono">{{ meta.files|join(', ') }}</span>{% endif %}
+      <span>{{ meta.timestamp }}</span>
+      <div class="dl no-print">
+        <a class="btn btn-ghost btn-xs" href="/api/download/{{ audit_id }}/json">JSON</a>
+        <a class="btn btn-ghost btn-xs" href="/api/download/{{ audit_id }}/csv">CSV</a>
+        <a class="btn btn-ghost btn-xs" href="/api/download/{{ audit_id }}/txt">Text</a>
+        <button class="btn btn-ghost btn-xs" type="button" onclick="window.print()">Print</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== SCORE ============================= -->
+<section class="section dots" style="padding:20px 0 80px">
+  <div class="wrap">
+    <div class="score-band">
+      <div class="score-card {{ score_class(score) }} reveal">
+        <p class="eyebrow white" style="font-size:12px">{{ 'Average score' if fleet else 'Compliance score' }}</p>
+        <div>
+          <div class="score-big">{{ score }}<small> /100</small></div>
+          <span class="verdict">{{ verdict(score) }}</span>
+        </div>
+      </div>
+      {% if fleet %}
+        {{ sev_cards(report.total_critical, report.total_high, report.total_medium, report.total_low) }}
+      {% else %}
+        {{ sev_cards(report.critical, report.high, report.medium, report.low) }}
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{% if fleet %}
+<!-- ============================== DEVICES =========================== -->
+<section class="section" style="padding:0 0 80px" aria-labelledby="dev-title">
+  <div class="wrap">
+    <div class="section-head" style="margin-bottom:36px">
+      <div>
+        <p class="eyebrow">Devices</p>
+        <h2 class="headline" id="dev-title">Weakest first.</h2>
+      </div>
+    </div>
+    <div class="cyan-grid">
+      {% for d in report.devices|sort(attribute='score') %}
+      <a class="cyan-card reveal" href="#device-{{ loop.index }}">
+        <span class="cyan-score">{{ d.score }}<small> /100</small></span>
+        <span>
+          <span class="cyan-title" style="display:block">{{ d.hostname }}</span>
+          <span class="cyan-sub" style="display:block">{{ d.vendor|title }}{% if d.version %} {{ d.version }}{% endif %} · {{ verdict(d.score)|lower|title }}</span>
+          <span class="cyan-counts">
+            {% for k in ['critical', 'high', 'medium', 'low'] %}
+            <span title="{{ k|title }}"><i class="sev-dot {{ k }}" aria-hidden="true"></i>{{ d[k] }}</span>
+            {% endfor %}
+          </span>
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- ============================== FINDINGS ========================== -->
+<section class="section" style="padding-top:0" aria-labelledby="findings-title">
+  <div class="wrap">
+    <div class="section-head" style="margin-bottom:28px">
+      <div>
+        <p class="eyebrow">Findings</p>
+        <h2 class="headline" id="findings-title">What to fix,<span class="accent"> and how.</span></h2>
+      </div>
+      {% if meta.severity and meta.severity != 'low' %}
+      <span class="muted small" style="align-self:flex-end">Showing {{ meta.severity }} and above</span>
+      {% endif %}
+    </div>
+
+    <div class="tabs-bar no-print">
+      <div class="tabs" role="tablist" aria-label="Filter by severity">
+        {% for key, label in [('', 'All'), ('critical', 'Critical'), ('high', 'High'), ('medium', 'Medium'), ('low', 'Low')] %}
+        <button class="tab" role="tab" type="button" data-sev="{{ key }}" aria-selected="{{ 'true' if not key else 'false' }}">
+          {% if key %}<i class="sev-dot {{ key }}" aria-hidden="true"></i>{% endif %}{{ label }}<span class="count" data-count="{{ key }}"></span>
+        </button>
+        {% endfor %}
+      </div>
+      <input type="search" id="q" placeholder="Search rules, text or sections" aria-label="Search findings">
+    </div>
+
+    {% if fleet %}
+      {% for d in report.devices|sort(attribute='score') %}
+      <div class="device-block" id="device-{{ loop.index }}">
+        <h3>{{ d.hostname }} <span>{{ d.score }}/100 · {{ d.vendor|title }}</span></h3>
+        {{ findings(d.findings) }}
+      </div>
+      {% endfor %}
+    {% else %}
+      {{ findings(report.findings) }}
+    {% endif %}
+
+    <div id="no-match" class="empty" hidden><strong>No matching findings</strong>Try another severity or search term.</div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/results.js') }}"></script>
+{% endblock %}

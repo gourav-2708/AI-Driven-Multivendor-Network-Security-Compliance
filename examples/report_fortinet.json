@@ -1,0 +1,118 @@
+{
+  "report_type": "device",
+  "hostname": "FortiGate-Branch",
+  "vendor": "fortinet",
+  "version": "",
+  "source": "tests/fixtures/fortinet_sample.conf",
+  "score": 6,
+  "critical": 4,
+  "high": 5,
+  "medium": 2,
+  "low": 2,
+  "findings": [
+    {
+      "rule_id": "AUTH-001",
+      "severity": "CRITICAL",
+      "section": "auth / enable password",
+      "line": -1,
+      "description": "Privileged password stored in plaintext or reversible form, with no hashed secret",
+      "remediation": "Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration."
+    },
+    {
+      "rule_id": "AUTH-002",
+      "severity": "HIGH",
+      "section": "auth / aaa",
+      "line": -1,
+      "description": "AAA (Authentication, Authorization, Accounting) not configured",
+      "remediation": "Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS)."
+    },
+    {
+      "rule_id": "AUTH-003",
+      "severity": "HIGH",
+      "section": "management access / telnet",
+      "line": -1,
+      "description": "Telnet permitted for device management (cleartext credentials)",
+      "remediation": "Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS)."
+    },
+    {
+      "rule_id": "PASSWD-001",
+      "severity": "CRITICAL",
+      "section": "service password-encryption",
+      "line": -1,
+      "description": "Passwords stored in plaintext: password encryption is not enabled",
+      "remediation": "Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials."
+    },
+    {
+      "rule_id": "ACL-001",
+      "severity": "CRITICAL",
+      "section": "ACL 'policy 1 (Allow_All_Outbound)' entry 1 (line 69)",
+      "line": 69,
+      "description": "ACL contains unrestricted 'permit any any' (allows all traffic)",
+      "remediation": "Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit."
+    },
+    {
+      "rule_id": "ACL-002",
+      "severity": "HIGH",
+      "section": "interface 'mgmt'",
+      "line": 26,
+      "description": "Management interface has no inbound ACL applied",
+      "remediation": "Apply an inbound ACL/filter to every management interface that admits only known management hosts and the required protocols (SSH, SNMP, HTTPS)."
+    },
+    {
+      "rule_id": "SNMP-001",
+      "severity": "CRITICAL",
+      "section": "snmp / community 'public' (read-only)",
+      "line": 53,
+      "description": "SNMPv1/v2c community string is a default or easily guessed value",
+      "remediation": "Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities."
+    },
+    {
+      "rule_id": "SNMP-002",
+      "severity": "HIGH",
+      "section": "snmp / community 'public'",
+      "line": 53,
+      "description": "SNMP community is not restricted to known management hosts",
+      "remediation": "Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts')."
+    },
+    {
+      "rule_id": "SVC-001",
+      "severity": "HIGH",
+      "section": "management access / http",
+      "line": -1,
+      "description": "Plain-text HTTP management access is enabled",
+      "remediation": "Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate."
+    },
+    {
+      "rule_id": "LOG-001",
+      "severity": "MEDIUM",
+      "section": "logging",
+      "line": -1,
+      "description": "No remote syslog server configured",
+      "remediation": "Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response."
+    },
+    {
+      "rule_id": "LOG-002",
+      "severity": "LOW",
+      "section": "logging buffered",
+      "line": -1,
+      "description": "Buffered (local) logging not enabled",
+      "remediation": "Enable a local log buffer ('logging buffered 65536 informational'; JunOS 'syslog file'; FortiOS memory/disk logging) as a fallback when the collector is unreachable."
+    },
+    {
+      "rule_id": "NTP-001",
+      "severity": "MEDIUM",
+      "section": "ntp",
+      "line": -1,
+      "description": "NTP not configured; device clock may be unsynchronised",
+      "remediation": "Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering."
+    },
+    {
+      "rule_id": "INTF-001",
+      "severity": "LOW",
+      "section": "interface 'dmz'",
+      "line": 34,
+      "description": "Interface is active but has no IP address or description assigned",
+      "remediation": "Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable."
+    }
+  ]
+}

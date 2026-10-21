@@ -1,0 +1,50 @@
+{# Shared pieces. #}
+
+{% macro score_class(score) -%}
+  {%- if score is number -%}{{ '' if score >= 80 else ('warn' if score >= 50 else 'bad') }}{%- else -%}none{%- endif -%}
+{%- endmacro %}
+
+{% macro verdict(score) -%}
+  {%- if score is number -%}{{ 'SECURE' if score >= 80 else ('AT RISK' if score >= 50 else 'CRITICAL') }}{%- endif -%}
+{%- endmacro %}
+
+{% macro arrow() -%}
+<svg width="20" height="14" viewBox="0 0 20 14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 7h17M12 1l6 6-6 6"/></svg>
+{%- endmacro %}
+
+{% macro sev_cards(critical, high, medium, low) %}
+  <div class="stat-grid four">
+    {% for name, n in [('Critical', critical), ('High', high), ('Medium', medium), ('Low', low)] %}
+    <div class="stat-card compact reveal">
+      <div class="stat-num">{{ n }}</div>
+      <div class="stat-title"><i class="sev-dot {{ name|lower }}" aria-hidden="true"></i>{{ name }}</div>
+    </div>
+    {% endfor %}
+  </div>
+{% endmacro %}
+
+{% macro findings(items) %}
+  {% if items %}
+  <ul class="findings" data-findings>
+    {% for f in items %}
+    <li data-sev="{{ f.severity|lower }}"
+        data-text="{{ (f.rule_id ~ ' ' ~ f.description ~ ' ' ~ f.section)|lower }}">
+      <details class="finding">
+        <summary>
+          <span class="sev-label"><i class="sev-dot {{ f.severity|lower }}" aria-hidden="true"></i>{{ f.severity }}</span>
+          <span class="rule">{{ f.rule_id }}</span>
+          <span class="f-desc">{{ f.description }}</span>
+          <span class="plus" aria-hidden="true"></span>
+        </summary>
+        <div class="f-body">
+          <dl><dt>Where</dt><dd>{{ f.section }}{% if f.line is defined and f.line > 0 %} · line {{ f.line }}{% endif %}</dd></dl>
+          <dl><dt>How to fix</dt><dd>{{ f.remediation }}</dd></dl>
+        </div>
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty"><strong>No findings</strong>Nothing at or above the selected severity.</div>
+  {% endif %}
+{% endmacro %}

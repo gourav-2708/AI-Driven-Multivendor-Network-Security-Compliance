@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% from "_macros.html" import score_class, arrow %}
+{% block title %}History{% endblock %}
+
+{% block content %}
+<section class="page-top">
+  <div class="wrap">
+    <p class="eyebrow">Audit history</p>
+    <h1 class="spaced">History</h1>
+    <div class="meta-row">
+      {% if ephemeral_history %}<span>History on this hosted instance is temporary and may reset at any time.</span>{% endif %}
+      <span>{% if entries|length >= 50 %}Latest 50 audits{% else %}{{ entries|length }} audit{{ '' if entries|length == 1 else 's' }}{% endif %}, newest first</span>
+      <div class="dl"><a class="btn btn-primary btn-sm" href="{{ url_for('index') }}#audit">New audit {{ arrow() }}</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="section dots" style="padding-top:20px">
+  <div class="wrap">
+    {% if entries %}
+    <div class="table-wrap reveal">
+      <table class="table">
+        <thead>
+          <tr>
+            <th scope="col">Score</th>
+            <th scope="col">Audit</th>
+            <th scope="col"><span hidden>Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+          <tr>
+            <td><span class="score-chip {{ 'bad' if e.error else score_class(e.avg_score) }}">{{ '!' if e.error else e.avg_score }}</span></td>
+            <td class="files-cell">
+              <a class="mono" href="{{ url_for('results_page', aid=e.id) }}">{{ e.files|join(', ') }}</a>
+              <span class="small faint">
+                {% if e.error %}<span style="color:var(--crit)">Audit failed</span>{% else %}{{ e.devices }} device{{ '' if e.devices == 1 else 's' }}{% endif %}
+                · {{ e.timestamp }}
+              </span>
+            </td>
+            <td class="nowrap" style="text-align:right">
+              {% if not e.error %}<a class="btn btn-ghost btn-xs" href="/api/download/{{ e.id }}/json">JSON</a>{% endif %}
+              <button class="btn btn-ghost btn-xs btn-danger" type="button" data-delete="{{ e.id }}"
+                      aria-label="Delete audit from {{ e.timestamp }}">Delete</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="panel empty">
+      <strong>No audits yet</strong>
+      <p style="margin-bottom:28px">Run your first audit to see it here.</p>
+      <a class="btn btn-primary" href="{{ url_for('index') }}#audit">Start an audit {{ arrow() }}</a>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('[data-delete]').forEach(function (btn) {
+  btn.addEventListener('click', async function () {
+    if (!confirm('Delete this audit? This cannot be undone.')) return;
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/result/' + btn.dataset.delete, { method: 'DELETE' });
+      if (!r.ok) throw new Error();
+      btn.closest('tr').remove();
+    } catch (_) {
+      btn.disabled = false;
+      alert('Could not delete the audit. Please try again.');
+    }
+  });
+});
+</script>
+{% endblock %}

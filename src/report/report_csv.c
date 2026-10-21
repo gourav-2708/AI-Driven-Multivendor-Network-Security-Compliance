@@ -1,78 +1,46 @@
 /**
  * @file report_csv.c
- * @brief CSV compliance report formatter (RFC 4180).
- *
- * Emits one row per finding. Fields are always double-quoted and internal
- * double-quotes are escaped by doubling them.
+ * @brief RFC 4180 CSV report: one row per finding, CRLF line endings.
  */
+#include "netaudit/safe_str.h"
+#include "report_internal.h"
 
-#include <stdio.h>
-#include <string.h>
-#include "report.h"
-#include "model.h"
-#include "common.h"
-
-/** Write a CSV-quoted field (with trailing comma if not last). */
-static void csv_field(FILE *fp, const char *s, bool last)
+static void field(FILE *fp, const char *s, bool last)
 {
     fputc('"', fp);
-    for (const char *p = s; *p; p++) {
-        if (*p == '"') fputc('"', fp);
-        fputc(*p, fp);
+    for (; s && *s; s++) {
+        if (*s == '"') fputc('"', fp);
+        fputc(*s, fp);
     }
     fputc('"', fp);
-    if (!last) fputc(',', fp);
+    fputs(last ? "\r\n" : ",", fp);
 }
 
-static void csv_header(FILE *fp)
+static void csv_begin(ReportSession *s)
 {
-    fprintf(fp, "device,vendor,rule_id,severity,section,description,remediation\r\n");
+    fputs("device,vendor,rule_id,severity,section,description,remediation\r\n",
+          s->opts.out);
 }
 
-int report_csv_device(const AuditResult *r, const ReportOptions *o)
+static void csv_device(ReportSession *s, const AuditResult *r, int index)
 {
-    FILE *fp = o->output ? o->output : stdout;
-    const DeviceModel *d = r->device;
-
-    csv_header(fp);
+    FILE *fp = s->opts.out;
+    (void)index;
     for (int i = 0; i < r->finding_count; i++) {
         const Finding *f = &r->findings[i];
-        if (f->severity > o->min_severity) continue;
-
-        csv_field(fp, d->hostname[0] ? d->hostname : "(unknown)", false);
-        csv_field(fp, d->vendor, false);
-        csv_field(fp, f->rule_id, false);
-        csv_field(fp, SEVERITY_LABELS[f->severity], false);
-        csv_field(fp, f->affected_section, false);
-        csv_field(fp, f->description, false);
-        csv_field(fp, f->remediation, true);
-        fprintf(fp, "\r\n");
+        if (!report_shows(s, f)) continue;
+        field(fp, model_hostname(r->device), false);
+        field(fp, r->device->vendor, false);
+        field(fp, f->rule->id, false);
+        field(fp, severity_label(f->severity), false);
+        field(fp, f->section, false);
+        field(fp, f->description, false);
+        field(fp, f->remediation, true);
     }
-    return AUDIT_OK;
 }
 
-int report_csv_aggregate(const AuditResult **rs, int n,
-                         const ReportOptions *o)
-{
-    FILE *fp = o->output ? o->output : stdout;
-    csv_header(fp);
-
-    for (int i = 0; i < n; i++) {
-        const AuditResult *r = rs[i];
-        const DeviceModel *d = r->device;
-        for (int j = 0; j < r->finding_count; j++) {
-            const Finding *f = &r->findings[j];
-            if (f->severity > o->min_severity) continue;
-
-            csv_field(fp, d->hostname[0] ? d->hostname : "(unknown)", false);
-            csv_field(fp, d->vendor, false);
-            csv_field(fp, f->rule_id, false);
-            csv_field(fp, SEVERITY_LABELS[f->severity], false);
-            csv_field(fp, f->affected_section, false);
-            csv_field(fp, f->description, false);
-            csv_field(fp, f->remediation, true);
-            fprintf(fp, "\r\n");
-        }
-    }
-    return AUDIT_OK;
-}
+const ReportFormatOps REPORT_OPS_CSV = {
+    .begin  = csv_begin,
+    .device = csv_device,
+    .end    = NULL,
+};

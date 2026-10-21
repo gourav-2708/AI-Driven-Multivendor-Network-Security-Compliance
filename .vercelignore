@@ -1,0 +1,18 @@
+# Never upload local build output (it is rebuilt on Linux by scripts/vercel-build.sh)
+build/
+public/
+*.exe
+*.o
+*.d
+
+# Never upload local audit data: uploaded configs and their reports
+frontends/web/history/
+frontends/web/uploads/
+net-audit-test-report.tmp
+
+# Not needed to build or run the web dashboard
+frontends/desktop/
+.github/
+**/__pycache__/
+.venv/
+venv/

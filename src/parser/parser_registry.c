@@ -1,86 +1,127 @@
-﻿/**
+/**
  * @file parser_registry.c
- * @brief Global vendor-parser registry implementation.
- *
- * Parsers self-register at start-up via parser_register().
- * The engine never references a specific parser directly.
+ * @brief Vendor-parser registry and confidence-based auto-detection.
  */
+#include "netaudit/line_reader.h"
+#include "netaudit/log.h"
+#include "netaudit/parser.h"
+#include "netaudit/safe_str.h"
 
-#include <string.h>
-#include "parser.h"
-#include "common.h"
+/* -- Built-in parsers: add new vendors here --------------------------------- */
+extern const VendorParser PARSER_CISCO_IOS;
+extern const VendorParser PARSER_JUNIPER_JUNOS;
+extern const VendorParser PARSER_FORTINET_FORTIOS;
 
-/* -- Registry storage ------------------------------------------------------ */
+static const VendorParser *const k_builtin[] = {
+    &PARSER_CISCO_IOS,
+    &PARSER_JUNIPER_JUNOS,
+    &PARSER_FORTINET_FORTIOS,
+};
 
-static const VendorParser *s_parsers[MAX_PARSERS];
-static int                 s_parser_count = 0;
+/* -- Registry --------------------------------------------------------------- */
+static const VendorParser *s_parsers[NA_MAX_PARSERS];
+static int                 s_count;
 
-/**
- * @brief Register a vendor parser.
- */
-void parser_register(const VendorParser *p)
+void parser_registry_init(void)
 {
-    if (!p) {
-        LOG_ERR("parser_register: NULL pointer");
-        return;
-    }
-    if (s_parser_count >= MAX_PARSERS) {
-        LOG_ERR("parser_register: registry full (max %d)", MAX_PARSERS);
-        return;
-    }
+    for (size_t i = 0; i < NA_ARRAY_LEN(k_builtin); i++)
+        parser_register(k_builtin[i]);
+}
 
-    /* Overwrite existing entry for the same vendor name. */
-    for (int i = 0; i < s_parser_count; i++) {
-        if (portable_strcasecmp(s_parsers[i]->vendor_name, p->vendor_name) == 0) {
-            LOG_WRN("parser_register: overwriting existing '%s' parser",
-                    p->vendor_name);
+AuditStatus parser_register(const VendorParser *p)
+{
+    if (!p || !p->name || !p->probe || !p->parse) return AUDIT_ERR_ARG;
+
+    for (int i = 0; i < s_count; i++) {
+        if (str_eq_ci(s_parsers[i]->name, p->name)) {
             s_parsers[i] = p;
-            return;
+            return AUDIT_OK;
         }
     }
-
-    s_parsers[s_parser_count++] = p;
-    LOG_DBG("parser_register: registered '%s' (total: %d)",
-            p->vendor_name, s_parser_count);
+    if (s_count >= NA_MAX_PARSERS) {
+        LOG_ERR("parser registry full (%d parsers)", NA_MAX_PARSERS);
+        return AUDIT_ERR_LIMIT;
+    }
+    s_parsers[s_count++] = p;
+    return AUDIT_OK;
 }
 
-/**
- * @brief Look up a parser by vendor name (case-insensitive).
- */
-const VendorParser *parser_find_by_vendor(const char *vendor_name)
+int parser_count(void) { return s_count; }
+
+const VendorParser *parser_at(int index)
 {
-    if (!vendor_name) return NULL;
-    for (int i = 0; i < s_parser_count; i++) {
-        if (portable_strcasecmp(s_parsers[i]->vendor_name, vendor_name) == 0)
-            return s_parsers[i];
+    return (index >= 0 && index < s_count) ? s_parsers[index] : NULL;
+}
+
+const VendorParser *parser_find(const char *name)
+{
+    for (int i = 0; name && i < s_count; i++) {
+        if (str_eq_ci(s_parsers[i]->name, name)) return s_parsers[i];
     }
     return NULL;
 }
 
-/**
- * @brief Auto-detect the parser for a config file.
- *
- * Calls each registered parser's detect() function in registration order.
- */
-const VendorParser *parser_detect(const char *filepath)
+/* -- Detection --------------------------------------------------------------- */
+
+AuditStatus config_sample_load(const char *path, ConfigSample *out)
 {
-    if (!filepath) return NULL;
-    for (int i = 0; i < s_parser_count; i++) {
-        if (s_parsers[i]->detect && s_parsers[i]->detect(filepath)) {
-            LOG_DBG("parser_detect: '%s' matched '%s'",
-                    s_parsers[i]->vendor_name, filepath);
-            return s_parsers[i];
+    if (!out) return AUDIT_ERR_ARG;
+    memset(out, 0, sizeof(*out));
+
+    LineReader r;
+    AuditStatus rc = line_reader_open(&r, path);
+    if (rc != AUDIT_OK) return rc;
+    r.quiet = true;                     /* the parser will warn, once */
+
+    char *line;
+    while (out->count < CONFIG_SAMPLE_LINES && (line = line_reader_next(&r))) {
+        str_trim(line);
+        if (line[0] == '\0') continue;
+        safe_strcpy(out->lines[out->count++], CONFIG_SAMPLE_WIDTH, line);
+    }
+    rc = line_reader_failed(&r) ? AUDIT_ERR_IO : AUDIT_OK;
+    line_reader_close(&r);
+    return rc;
+}
+
+const VendorParser *parser_detect(const char *path, int *confidence_out)
+{
+    static ConfigSample sample;      /* ~6 KB: keep it off the stack */
+    if (confidence_out) *confidence_out = 0;
+    if (config_sample_load(path, &sample) != AUDIT_OK) return NULL;
+
+    const VendorParser *best = NULL;
+    int best_score = 0;
+    for (int i = 0; i < s_count; i++) {
+        int score = s_parsers[i]->probe(&sample);
+        LOG_DBG("detect: %s scores %d for '%s'", s_parsers[i]->name, score, path);
+        if (score > best_score) {
+            best = s_parsers[i];
+            best_score = score;
         }
     }
-    LOG_WRN("parser_detect: no parser matched '%s'", filepath);
-    return NULL;
+    if (best_score < PARSER_MIN_CONFIDENCE) return NULL;
+    if (confidence_out) *confidence_out = best_score;
+    return best;
 }
 
-/**
- * @brief Return number of registered parsers.
- */
-int parser_count(void)
+bool sample_has_prefix(const ConfigSample *s, const char *prefix)
 {
-    return s_parser_count;
+    for (int i = 0; i < s->count; i++)
+        if (str_starts_with(s->lines[i], prefix)) return true;
+    return false;
 }
 
+bool sample_has_prefix_ci(const ConfigSample *s, const char *prefix)
+{
+    for (int i = 0; i < s->count; i++)
+        if (str_starts_with_ci(s->lines[i], prefix)) return true;
+    return false;
+}
+
+bool sample_contains_ci(const ConfigSample *s, const char *needle)
+{
+    for (int i = 0; i < s->count; i++)
+        if (str_contains_ci(s->lines[i], needle)) return true;
+    return false;
+}

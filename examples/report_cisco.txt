@@ -1,0 +1,96 @@
+============================================================================
+  NET-AUDIT COMPLIANCE REPORT
+============================================================================
+  Device  : core-router-01
+  Vendor  : cisco
+  Version : 15.7
+  Source  : tests/fixtures/cisco_sample.cfg
+----------------------------------------------------------------------------
+  Compliance Score : 2 / 100
+  Total Findings   : 18  (Critical:5  High:7  Medium:4  Low:2)
+
+-- Policy Category Summary --
+  Authentication (AUTH)               FAIL
+  Passwords (PASSWD)                  FAIL
+  Access Control (ACL)                FAIL
+  SNMP                                FAIL
+  Services (SVC)                      FAIL
+  Logging (LOG)                       FAIL
+  Time Sync (NTP)                     FAIL
+  Interfaces (INTF)                   FAIL
+
+-- Findings --
+
+  [AUTH-001] Privileged password stored in plaintext or reversible form, with no hashed secret (CRITICAL)
+  Section     : auth / enable password
+  Remediation : Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration.
+
+  [AUTH-002] AAA (Authentication, Authorization, Accounting) not configured (HIGH)
+  Section     : auth / aaa
+  Remediation : Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).
+
+  [AUTH-003] Telnet permitted for device management (cleartext credentials) (HIGH)
+  Section     : management access / telnet
+  Remediation : Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).
+
+  [AUTH-004] SSH not enabled; no encrypted management access configured (HIGH)
+  Section     : management access / ssh
+  Remediation : Enable SSHv2: 'ip ssh version 2' and 'crypto key generate rsa modulus 4096' (IOS), 'system services ssh' (JunOS), 'ssh' in allowaccess (FortiOS). Then restrict management to SSH.
+
+  [PASSWD-001] Passwords stored in plaintext: password encryption is not enabled (CRITICAL)
+  Section     : service password-encryption
+  Remediation : Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials.
+
+  [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
+  Section     : ACL 'INSECURE_ACL' entry 1 (line 68)
+  Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+
+  [ACL-002] Management interface has no inbound ACL applied (HIGH)
+  Section     : interface 'GigabitEthernet0/2'
+  Remediation : Apply an inbound ACL/filter to every management interface that admits only known management hosts and the required protocols (SSH, SNMP, HTTPS).
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'public' (read-only)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
+  Section     : snmp / community 'private' (read-write)
+  Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'public'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
+  Section     : snmp / community 'private'
+  Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+
+  [SVC-001] Plain-text HTTP management access is enabled (HIGH)
+  Section     : management access / http
+  Remediation : Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate.
+
+  [SVC-002] CDP (Cisco Discovery Protocol) enabled globally (MEDIUM)
+  Section     : service / cdp run
+  Remediation : Run 'no cdp run', or at least 'no cdp enable' on every external and untrusted interface. CDP discloses platform, version and addressing.
+
+  [SVC-003] TCP/UDP small servers enabled (echo, chargen, discard, daytime) (MEDIUM)
+  Section     : service tcp-small-servers / udp-small-servers
+  Remediation : Disable with 'no service tcp-small-servers' and 'no service udp-small-servers'. These services are obsolete and can be abused for amplification attacks.
+
+  [LOG-001] No remote syslog server configured (MEDIUM)
+  Section     : logging
+  Remediation : Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response.
+
+  [LOG-002] Buffered (local) logging not enabled (LOW)
+  Section     : logging buffered
+  Remediation : Enable a local log buffer ('logging buffered 65536 informational'; JunOS 'syslog file'; FortiOS memory/disk logging) as a fallback when the collector is unreachable.
+
+  [NTP-001] NTP not configured; device clock may be unsynchronised (MEDIUM)
+  Section     : ntp
+  Remediation : Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering.
+
+  [INTF-001] Interface is active but has no IP address or description assigned (LOW)
+  Section     : interface 'GigabitEthernet0/3'
+  Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+============================================================================
+

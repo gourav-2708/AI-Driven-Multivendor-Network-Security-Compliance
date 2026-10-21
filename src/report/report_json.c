@@ -1,170 +1,130 @@
 /**
  * @file report_json.c
- * @brief JSON-lite compliance report formatter (hand-rolled, no external deps).
+ * @brief JSON report (RFC 8259), hand-written with no library dependency.
  *
- * Generates RFC 8259-compliant JSON without any library dependency.
- * Special characters in strings are properly escaped.
+ * Schema (stable; consumed by the web and desktop front-ends):
+ *   device report: { "report_type": "device", "hostname", "vendor",
+ *                    "version", "source", "score", "critical", "high",
+ *                    "medium", "low", "findings": [ {...} ] }
+ *   fleet report:  { "report_type": "aggregate", "devices": [ <device
+ *                    object without report_type> ], "devices_audited",
+ *                    "avg_score", "total_critical", "total_high",
+ *                    "total_medium", "total_low" }
+ *   finding:       { "rule_id", "severity", "section", "line",
+ *                    "description", "remediation" }
  */
+#include "netaudit/safe_str.h"
+#include "report_internal.h"
 
-#include <stdio.h>
-#include <string.h>
-#include "report.h"
-#include "model.h"
-#include "common.h"
-
-/** Emit a JSON-escaped string value (no surrounding quotes). */
-static void json_str_content(FILE *fp, const char *s)
+static void json_string(FILE *fp, const char *s)
 {
-    for (const char *p = s; *p; p++) {
-        switch (*p) {
-            case '"':  fputs("\\\"", fp); break;
-            case '\\': fputs("\\\\", fp); break;
-            case '\n': fputs("\\n",  fp); break;
-            case '\r': fputs("\\r",  fp); break;
-            case '\t': fputs("\\t",  fp); break;
-            default:
-                if ((unsigned char)*p < 0x20)
-                    fprintf(fp, "\\u%04x", (unsigned char)*p);
-                else
-                    fputc(*p, fp);
+    fputc('"', fp);
+    for (; s && *s; s++) {
+        unsigned char c = (unsigned char)*s;
+        switch (c) {
+        case '"':  fputs("\\\"", fp); break;
+        case '\\': fputs("\\\\", fp); break;
+        case '\n': fputs("\\n", fp);  break;
+        case '\r': fputs("\\r", fp);  break;
+        case '\t': fputs("\\t", fp);  break;
+        default:
+            if (c < 0x20 || c == 0x7f) fprintf(fp, "\\u%04x", c);
+            else                       fputc(c, fp);
         }
     }
-}
-
-static void json_str(FILE *fp, const char *s)
-{
-    fputc('"', fp);
-    json_str_content(fp, s);
     fputc('"', fp);
 }
 
-static void json_kv_str(FILE *fp, const char *key, const char *val,
-                        bool last, int indent)
+static void kv_str(FILE *fp, int indent, const char *key, const char *val, bool last)
 {
     fprintf(fp, "%*s", indent, "");
-    json_str(fp, key);
+    json_string(fp, key);
     fputs(": ", fp);
-    json_str(fp, val ? val : "");
-    if (!last) fputc(',', fp);
-    fputc('\n', fp);
+    json_string(fp, val);
+    fputs(last ? "\n" : ",\n", fp);
 }
 
-static void json_kv_int(FILE *fp, const char *key, int val,
-                        bool last, int indent)
+static void kv_int(FILE *fp, int indent, const char *key, int val, bool last)
 {
     fprintf(fp, "%*s", indent, "");
-    json_str(fp, key);
-    fprintf(fp, ": %d", val);
-    if (!last) fputc(',', fp);
-    fputc('\n', fp);
+    json_string(fp, key);
+    fprintf(fp, ": %d%s", val, last ? "\n" : ",\n");
 }
 
-static void emit_finding(FILE *fp, const Finding *f, bool last, int indent)
+static void finding(FILE *fp, int indent, const Finding *f, bool last)
 {
     fprintf(fp, "%*s{\n", indent, "");
-    json_kv_str(fp, "rule_id",  f->rule_id,                        false, indent+2);
-    json_kv_str(fp, "severity", SEVERITY_LABELS[f->severity],      false, indent+2);
-    json_kv_str(fp, "section",  f->affected_section,               false, indent+2);
-    json_kv_str(fp, "description", f->description,                 false, indent+2);
-    json_kv_str(fp, "remediation", f->remediation,                 true,  indent+2);
+    kv_str(fp, indent + 2, "rule_id",     f->rule->id, false);
+    kv_str(fp, indent + 2, "severity",    severity_label(f->severity), false);
+    kv_str(fp, indent + 2, "section",     f->section, false);
+    kv_int(fp, indent + 2, "line",        f->line_number, false);
+    kv_str(fp, indent + 2, "description", f->description, false);
+    kv_str(fp, indent + 2, "remediation", f->remediation, true);
     fprintf(fp, "%*s}%s\n", indent, "", last ? "" : ",");
 }
 
-static void emit_device_obj(FILE *fp, const AuditResult *r,
-                            const ReportOptions *o, bool last, int indent)
+static void device_body(ReportSession *s, const AuditResult *r, int indent)
 {
-    const DeviceModel *d = r->device;
-    fprintf(fp, "%*s{\n", indent, "");
-    json_kv_str(fp, "hostname",   d->hostname[0] ? d->hostname : "(unknown)", false, indent+2);
-    json_kv_str(fp, "vendor",     d->vendor,        false, indent+2);
-    json_kv_str(fp, "version",    d->os_version,    false, indent+2);
-    json_kv_str(fp, "source",     d->source_file,   false, indent+2);
-    json_kv_int(fp, "score",      r->score,          false, indent+2);
-    json_kv_int(fp, "critical",   r->sev_counts[SEV_CRITICAL], false, indent+2);
-    json_kv_int(fp, "high",       r->sev_counts[SEV_HIGH],     false, indent+2);
-    json_kv_int(fp, "medium",     r->sev_counts[SEV_MEDIUM],   false, indent+2);
-    json_kv_int(fp, "low",        r->sev_counts[SEV_LOW],      false, indent+2);
-
-    /* findings array */
-    fprintf(fp, "%*s\"findings\": [\n", indent+2, "");
-    int shown = 0;
-    /* Count shown first to know when to omit trailing comma */
-    int show_count = 0;
-    for (int i = 0; i < r->finding_count; i++)
-        if (r->findings[i].severity <= o->min_severity) show_count++;
-
-    for (int i = 0; i < r->finding_count; i++) {
-        const Finding *f = &r->findings[i];
-        if (f->severity > o->min_severity) continue;
-        shown++;
-        emit_finding(fp, f, (shown == show_count), indent+4);
-    }
-    fprintf(fp, "%*s]\n", indent+2, "");
-    fprintf(fp, "%*s}%s\n", indent, "", last ? "" : ",");
-}
-
-int report_json_device(const AuditResult *r, const ReportOptions *o)
-{
-    FILE *fp = o->output ? o->output : stdout;
+    FILE *fp = s->opts.out;
     const DeviceModel *d = r->device;
 
-    /* Emit a single flat object: no nested anonymous object */
-    fprintf(fp, "{\n");
-    json_kv_str(fp, "report_type", "device",                               false, 2);
-    json_kv_str(fp, "hostname",    d->hostname[0] ? d->hostname : "(unknown)", false, 2);
-    json_kv_str(fp, "vendor",      d->vendor,                              false, 2);
-    json_kv_str(fp, "version",     d->os_version,                          false, 2);
-    json_kv_str(fp, "source",      d->source_file,                         false, 2);
-    json_kv_int(fp, "score",       r->score,                               false, 2);
-    json_kv_int(fp, "critical",    r->sev_counts[SEV_CRITICAL],            false, 2);
-    json_kv_int(fp, "high",        r->sev_counts[SEV_HIGH],                false, 2);
-    json_kv_int(fp, "medium",      r->sev_counts[SEV_MEDIUM],              false, 2);
-    json_kv_int(fp, "low",         r->sev_counts[SEV_LOW],                 false, 2);
+    kv_str(fp, indent, "hostname", model_hostname(d), false);
+    kv_str(fp, indent, "vendor",   d->vendor, false);
+    kv_str(fp, indent, "version",  d->os_version, false);
+    kv_str(fp, indent, "source",   d->source_file, false);
+    kv_int(fp, indent, "score",    r->score, false);
+    kv_int(fp, indent, "critical", r->sev_counts[SEV_CRITICAL], false);
+    kv_int(fp, indent, "high",     r->sev_counts[SEV_HIGH], false);
+    kv_int(fp, indent, "medium",   r->sev_counts[SEV_MEDIUM], false);
+    kv_int(fp, indent, "low",      r->sev_counts[SEV_LOW], false);
 
-    /* findings array */
-    fprintf(fp, "  \"findings\": [\n");
-    int shown = 0;
-    int show_count = 0;
-    for (int i = 0; i < r->finding_count; i++)
-        if (r->findings[i].severity <= o->min_severity) show_count++;
-
+    fprintf(fp, "%*s\"findings\": [\n", indent, "");
+    int remaining = report_count_shown(s, r);
     for (int i = 0; i < r->finding_count; i++) {
-        const Finding *f = &r->findings[i];
-        if (f->severity > o->min_severity) continue;
-        shown++;
-        emit_finding(fp, f, (shown == show_count), 4);
+        if (!report_shows(s, &r->findings[i])) continue;
+        finding(fp, indent + 2, &r->findings[i], --remaining == 0);
     }
-    fprintf(fp, "  ]\n}\n");
-    return AUDIT_OK;
+    fprintf(fp, "%*s]\n", indent, "");
 }
 
-
-int report_json_aggregate(const AuditResult **rs, int n,
-                          const ReportOptions *o)
+static void json_begin(ReportSession *s)
 {
-    FILE *fp = o->output ? o->output : stdout;
-
-    int total_score = 0;
-    int total_sev[SEV_COUNT] = {0};
-    for (int i = 0; i < n; i++) {
-        total_score += rs[i]->score;
-        for (int s = 0; s < SEV_COUNT; s++)
-            total_sev[s] += rs[i]->sev_counts[s];
-    }
-    int avg = (n > 0) ? total_score / n : 0;
-
-    fprintf(fp, "{\n");
-    fprintf(fp, "  \"report_type\": \"aggregate\",\n");
-    json_kv_int(fp, "devices_audited", n,                    false, 2);
-    json_kv_int(fp, "avg_score",       avg,                  false, 2);
-    json_kv_int(fp, "total_critical",  total_sev[SEV_CRITICAL], false, 2);
-    json_kv_int(fp, "total_high",      total_sev[SEV_HIGH],     false, 2);
-    json_kv_int(fp, "total_medium",    total_sev[SEV_MEDIUM],   false, 2);
-    json_kv_int(fp, "total_low",       total_sev[SEV_LOW],      false, 2);
-    fprintf(fp, "  \"devices\": [\n");
-    for (int i = 0; i < n; i++) {
-        emit_device_obj(fp, rs[i], o, (i == n-1), 4);
-    }
-    fprintf(fp, "  ]\n}\n");
-    return AUDIT_OK;
+    if (!s->fleet) return;
+    fputs("{\n  \"report_type\": \"aggregate\",\n  \"devices\": [\n", s->opts.out);
 }
+
+static void json_device(ReportSession *s, const AuditResult *r, int index)
+{
+    FILE *fp = s->opts.out;
+    if (!s->fleet) {
+        fputs("{\n", fp);
+        kv_str(fp, 2, "report_type", "device", false);
+        device_body(s, r, 2);
+        fputs("}\n", fp);
+        return;
+    }
+    if (index > 0) fputs(",\n", fp);
+    fputs("    {\n", fp);
+    device_body(s, r, 6);
+    fputs("    }", fp);
+}
+
+static void json_end(ReportSession *s)
+{
+    if (!s->fleet) return;
+    FILE *fp = s->opts.out;
+    fputs("\n  ],\n", fp);
+    kv_int(fp, 2, "devices_audited", s->device_count, false);
+    kv_int(fp, 2, "avg_score",       report_average_score(s), false);
+    kv_int(fp, 2, "total_critical",  s->sev_totals[SEV_CRITICAL], false);
+    kv_int(fp, 2, "total_high",      s->sev_totals[SEV_HIGH], false);
+    kv_int(fp, 2, "total_medium",    s->sev_totals[SEV_MEDIUM], false);
+    kv_int(fp, 2, "total_low",       s->sev_totals[SEV_LOW], true);
+    fputs("}\n", fp);
+}
+
+const ReportFormatOps REPORT_OPS_JSON = {
+    .begin  = json_begin,
+    .device = json_device,
+    .end    = json_end,
+};

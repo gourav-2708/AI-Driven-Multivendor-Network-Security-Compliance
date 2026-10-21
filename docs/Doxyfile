@@ -1,0 +1,14 @@
+# Minimal Doxygen configuration - run `make docs` from the repository root.
+PROJECT_NAME           = "net-audit"
+PROJECT_BRIEF          = "Multi-vendor network security compliance auditor"
+OUTPUT_DIRECTORY       = build/docs
+INPUT                  = README.md include/netaudit src
+FILE_PATTERNS          = *.h *.c *.md
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = README.md
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+OPTIMIZE_OUTPUT_FOR_C  = YES
+GENERATE_LATEX         = NO
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO

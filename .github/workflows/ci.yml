@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: linux / ${{ matrix.cc }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install valgrind
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq valgrind
+      # Newer kernels use 32-bit mmap randomisation, which older ASan
+      # runtimes cannot handle (endless "AddressSanitizer:DEADLYSIGNAL").
+      - name: Reduce ASLR entropy for ASan
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Release build + tests + CLI smoke run
+        run: make CC=${{ matrix.cc }} check
+      - name: Sanitized build (ASan + UBSan) + tests
+        run: make CC=${{ matrix.cc }} MODE=debug test
+      - name: Valgrind
+        if: matrix.cc == 'gcc'
+        run: make valgrind
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make CC=clang check
+      - run: make CC=clang MODE=debug test
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: make mingw-w64-ucrt-x86_64-gcc
+      - run: make check

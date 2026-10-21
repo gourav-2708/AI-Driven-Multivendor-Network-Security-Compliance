@@ -1,49 +1,39 @@
 # ============================================================
-#  net-audit  —  .gitignore
+#  net-audit  -  .gitignore
 # ============================================================
 
-# --- Compiled binary ---
-net-audit.exe
-net-audit
+# --- Build output (binaries, objects, test runner, docs) ---
+build/
 *.o
-*.obj
-*.a
-*.lib
+*.d
+*.exe
+net-audit-test-report.tmp
 
-# --- Test binaries ---
-tests/test_parser.exe
-tests/test_engine.exe
-tests/test_runner.exe
+# --- Vercel: generated static output and local CLI state ---
+public/
+.vercel/
 
 # --- Python ---
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
 .env
 .venv/
 venv/
 env/
 *.egg-info/
 dist/
-build/
 
-# --- Flask runtime data (uploads & history) ---
-webapp/uploads/
-webapp/history/
-
-# --- Example/generated reports (optional: remove if you want to keep them) ---
-example_report_*.json
-example_report_*.csv
-example_report_*.txt
-
-# --- Desktop GUI cache ---
-desktop/__pycache__/
+# --- Web front-end runtime data (uploads & audit history) ---
+frontends/web/uploads/*
+frontends/web/history/*
+!frontends/web/uploads/.gitkeep
+!frontends/web/history/.gitkeep
 
 # --- OS files ---
 .DS_Store
 Thumbs.db
 desktop.ini
+$RECYCLE.BIN/
 *.swp
 *.swo
 *~
@@ -53,6 +43,3 @@ desktop.ini
 .idea/
 *.sublime-project
 *.sublime-workspace
-
-# --- Windows ---
-$RECYCLE.BIN/

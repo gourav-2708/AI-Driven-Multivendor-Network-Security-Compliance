@@ -1,0 +1,15 @@
+# Python project manifest for the net-audit web dashboard.
+# Vercel reads this for the Python version, dependencies and entrypoint.
+[project]
+name = "net-audit-web"
+version = "2.0.0"
+description = "Web dashboard for the net-audit multi-vendor network compliance auditor"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "Flask>=3.1,<4",
+]
+
+[tool.vercel]
+# Flask `app` object, re-exported from frontends/web/app.py by index.py
+entrypoint = "index:app"
