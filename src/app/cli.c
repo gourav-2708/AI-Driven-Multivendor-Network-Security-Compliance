@@ -25,9 +25,11 @@ void cli_print_usage(FILE *fp, const char *prog)
         "  -d, --dir <directory>      Audit every .cfg/.conf/.txt file in a directory\n"
         "  -s, --severity <level>     Report findings at or above: critical, high,\n"
         "                             medium, low (default: low)\n"
-        "      --color, --no-color    Force/disable ANSI colour (default: if a terminal)\n"
+        "      --color, --no-color    Force/disable ANSI colour (default: only on a\n"
+        "                             terminal; NO_COLOR is honoured)\n"
         "      --verbose              Debug logging on stderr\n"
         "  -q, --quiet                Errors only on stderr\n"
+        "      --exit-zero            Exit 0 even when findings are reported\n"
         "      --list-rules           Print the rule catalogue and exit\n"
         "      --list-vendors         Print supported vendors and exit\n"
         "  -V, --version              Print version and exit\n"
@@ -35,7 +37,7 @@ void cli_print_usage(FILE *fp, const char *prog)
         "\n"
         "Exit status:\n"
         "  0  all inputs audited, no findings at or above --severity\n"
-        "  1  all inputs audited, findings reported\n"
+        "  1  all inputs audited, findings reported (0 with --exit-zero)\n"
         "  2  usage error, unwritable output, or no input could be audited\n"
         "  3  some inputs could not be audited\n",
         NET_AUDIT_VERSION, prog, prog);
