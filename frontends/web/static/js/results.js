@@ -43,7 +43,7 @@
   q.addEventListener('input', apply);
 
   /* Deep link from a device card: open its first finding. */
-  document.querySelectorAll('a.cyan-card[href^="#device-"]').forEach(function (a) {
+  document.querySelectorAll('a.dev-card[href^="#device-"]').forEach(function (a) {
     a.addEventListener('click', function () {
       const first = document.querySelector(a.getAttribute('href') + ' details');
       if (first) first.open = true;

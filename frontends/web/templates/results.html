@@ -1,84 +1,106 @@
 {% extends "base.html" %}
-{% from "_macros.html" import sev_cards, findings, score_class, verdict, arrow %}
+{% from "_macros.html" import findings, score_class, verdict, arrow, ring, bar, rule_line %}
 {% set fleet = report.report_type == 'aggregate' %}
 {% set score = report.avg_score if fleet else report.score %}
+{% set sev = {'critical': report.total_critical if fleet else report.critical,
+              'high': report.total_high if fleet else report.high,
+              'medium': report.total_medium if fleet else report.medium,
+              'low': report.total_low if fleet else report.low} %}
 {% block title %}{{ 'Fleet audit' if fleet else (report.hostname or 'Audit result') }}{% endblock %}
+
+{% block subnav %}
+{% if not report.error %}
+<a href="#score" data-spy="score">Score</a>
+<a href="#severity" data-spy="severity">Severity</a>
+{% if fleet %}<a href="#devices" data-spy="devices">Devices</a>{% endif %}
+<a href="#findings" data-spy="findings">Findings</a>
+{% else %}
+<a href="{{ url_for('history_page') }}">History</a>
+{% endif %}
+{% endblock %}
+{% block subnav_cta %}<a class="btn btn-primary btn-nav" href="{{ url_for('index') }}#audit">New audit</a>{% endblock %}
 
 {% block content %}
 {% if report.error %}
-<section class="page-top">
+<section class="page-top stripes-tr">
   <div class="wrap">
+    {{ rule_line() }}
     <p class="eyebrow">Audit failed</p>
-    <h1 class="spaced" style="color:var(--crit)">No result</h1>
+    <h1>No result</h1>
     <div class="notice" role="alert">{{ report.error }}</div>
-    <div class="meta-row"><span>{{ meta.files|join(', ') }}</span><span>{{ meta.timestamp }}</span></div>
-    <p style="margin-top:32px"><a class="btn btn-primary" href="{{ url_for('index') }}#audit">Try again {{ arrow() }}</a></p>
+    <div class="meta-row"><span class="mono">{{ meta.files|join(', ') }}</span><span>{{ meta.timestamp }}</span></div>
+    <p style="margin-top:40px"><a class="btn btn-primary btn-lg" href="{{ url_for('index') }}#audit">Try again {{ arrow() }}</a></p>
   </div>
 </section>
 
 {% else %}
 <!-- ============================== HEADER ============================ -->
-<section class="page-top">
+<section class="page-top stripes-tr">
   <div class="wrap">
+    {{ rule_line() }}
     <p class="eyebrow">{{ 'Fleet compliance report' if fleet else 'Compliance report' }}</p>
-    <h1 class="spaced">{{ 'Fleet audit' if fleet else report.hostname }}</h1>
+    <h1>{{ 'Fleet audit' if fleet else report.hostname }}</h1>
     <div class="meta-row">
       {% if fleet %}<span>{{ report.devices_audited }} devices</span>
-      {% else %}<span>{{ report.vendor|title }}{% if report.version %} {{ report.version }}{% endif %}</span>
-      <span class="mono">{{ meta.files|join(', ') }}</span>{% endif %}
+      {% else %}<span>{{ report.vendor|title }}{% if report.version %} {{ report.version }}{% endif %}</span>{% endif %}
+      <span class="mono">{{ meta.files|join(', ') }}</span>
       <span>{{ meta.timestamp }}</span>
       <div class="dl no-print">
-        <a class="btn btn-ghost btn-xs" href="/api/download/{{ audit_id }}/json">JSON</a>
-        <a class="btn btn-ghost btn-xs" href="/api/download/{{ audit_id }}/csv">CSV</a>
-        <a class="btn btn-ghost btn-xs" href="/api/download/{{ audit_id }}/txt">Text</a>
-        <button class="btn btn-ghost btn-xs" type="button" onclick="window.print()">Print</button>
+        <a class="btn btn-ghost btn-sm" href="/api/download/{{ audit_id }}/json">JSON</a>
+        <a class="btn btn-ghost btn-sm" href="/api/download/{{ audit_id }}/csv">CSV</a>
+        <a class="btn btn-ghost btn-sm" href="/api/download/{{ audit_id }}/txt">Text</a>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="window.print()">Print</button>
       </div>
     </div>
   </div>
 </section>
 
 <!-- ============================== SCORE ============================= -->
-<section class="section dots" style="padding:20px 0 80px">
+<section class="sec sec-result dots" id="score" aria-labelledby="score-title">
   <div class="wrap">
-    <div class="score-band">
-      <div class="score-card {{ score_class(score) }} reveal">
-        <p class="eyebrow white" style="font-size:12px">{{ 'Average score' if fleet else 'Compliance score' }}</p>
-        <div>
-          <div class="score-big">{{ score }}<small> /100</small></div>
-          <span class="verdict">{{ verdict(score) }}</span>
-        </div>
+    <div class="result-score">
+      <div>
+        <p class="eyebrow">{{ 'Average score' if fleet else 'Compliance score' }}</p>
+        <h2 class="h-xl" id="score-title">{{ 'This fleet averages' if fleet else 'This device scores' }} <em>{{ score }} / 100.</em></h2>
+        <span class="verdict-pill {{ score_class(score) }}">{{ verdict(score) }}</span>
       </div>
-      {% if fleet %}
-        {{ sev_cards(report.total_critical, report.total_high, report.total_medium, report.total_low) }}
-      {% else %}
-        {{ sev_cards(report.critical, report.high, report.medium, report.low) }}
-      {% endif %}
+      {{ ring(score, score) }}
+    </div>
+
+    <div class="sev-wrap" id="severity">
+      {% set total = sev.critical + sev.high + sev.medium + sev.low %}
+      <div class="bars">
+        {% for k in ['critical', 'high', 'medium', 'low'] %}
+        {{ bar(k ~ ' findings', (100 * sev[k] / total) if total else 0, sev[k]) }}
+        {% endfor %}
+      </div>
+      <div class="sev-cards">
+        {% for k in ['critical', 'high', 'medium', 'low'] %}
+        <div class="sev-card {{ k }} reveal"><b>{{ sev[k] }}</b><span><i aria-hidden="true"></i>{{ k }}</span></div>
+        {% endfor %}
+      </div>
     </div>
   </div>
 </section>
 
 {% if fleet %}
 <!-- ============================== DEVICES =========================== -->
-<section class="section" style="padding:0 0 80px" aria-labelledby="dev-title">
+<section class="sec sec-proven" id="devices" aria-labelledby="dev-title">
   <div class="wrap">
-    <div class="section-head" style="margin-bottom:36px">
-      <div>
-        <p class="eyebrow">Devices</p>
-        <h2 class="headline" id="dev-title">Weakest first.</h2>
-      </div>
-    </div>
-    <div class="cyan-grid">
+    <p class="eyebrow">Devices</p>
+    <h2 class="h-lg" id="dev-title">Weakest <em>first.</em></h2>
+    <div class="dev-grid">
       {% for d in report.devices|sort(attribute='score') %}
-      <a class="cyan-card reveal" href="#device-{{ loop.index }}">
-        <span class="cyan-score">{{ d.score }}<small> /100</small></span>
+      <a class="dev-card {{ score_class(d.score) }} reveal" href="#device-{{ loop.index }}">
+        <span class="dev-score">{{ d.score }}<small> / 100</small></span>
         <span>
-          <span class="cyan-title" style="display:block">{{ d.hostname }}</span>
-          <span class="cyan-sub" style="display:block">{{ d.vendor|title }}{% if d.version %} {{ d.version }}{% endif %} · {{ verdict(d.score)|lower|title }}</span>
-          <span class="cyan-counts">
-            {% for k in ['critical', 'high', 'medium', 'low'] %}
-            <span title="{{ k|title }}"><i class="sev-dot {{ k }}" aria-hidden="true"></i>{{ d[k] }}</span>
-            {% endfor %}
-          </span>
+          <span class="dev-name" style="display:block">{{ d.hostname }}</span>
+          <span class="dev-sub" style="display:block">{{ d.vendor|title }}{% if d.version %} {{ d.version }}{% endif %} · {{ verdict(d.score)|lower|title }}</span>
+        </span>
+        <span class="dev-counts">
+          {% for k in ['critical', 'high', 'medium', 'low'] %}
+          <span title="{{ k|title }}"><i aria-hidden="true"></i>{{ d[k] }}</span>
+          {% endfor %}
         </span>
       </a>
       {% endfor %}
@@ -88,27 +110,23 @@
 {% endif %}
 
 <!-- ============================== FINDINGS ========================== -->
-<section class="section" style="padding-top:0" aria-labelledby="findings-title">
+<section class="sec sec-engage" id="findings" aria-labelledby="findings-title">
   <div class="wrap">
-    <div class="section-head" style="margin-bottom:28px">
-      <div>
-        <p class="eyebrow">Findings</p>
-        <h2 class="headline" id="findings-title">What to fix,<span class="accent"> and how.</span></h2>
-      </div>
-      {% if meta.severity and meta.severity != 'low' %}
-      <span class="muted small" style="align-self:flex-end">Showing {{ meta.severity }} and above</span>
-      {% endif %}
-    </div>
+    {{ rule_line() }}
+    <h2 class="h-xl" id="findings-title">What to fix,<em> and how.</em></h2>
+    {% if meta.severity and meta.severity != 'low' %}
+    <p class="lede" style="margin-top:18px;color:var(--text-3)">Showing {{ meta.severity }} and above.</p>
+    {% endif %}
 
     <div class="tabs-bar no-print">
-      <div class="tabs" role="tablist" aria-label="Filter by severity">
+      <div class="pill-tabs small" role="tablist" aria-label="Filter by severity">
         {% for key, label in [('', 'All'), ('critical', 'Critical'), ('high', 'High'), ('medium', 'Medium'), ('low', 'Low')] %}
         <button class="tab" role="tab" type="button" data-sev="{{ key }}" aria-selected="{{ 'true' if not key else 'false' }}">
-          {% if key %}<i class="sev-dot {{ key }}" aria-hidden="true"></i>{% endif %}{{ label }}<span class="count" data-count="{{ key }}"></span>
+          {{ label }}<span class="count" data-count="{{ key }}"></span>
         </button>
         {% endfor %}
       </div>
-      <input type="search" id="q" placeholder="Search rules, text or sections" aria-label="Search findings">
+      <input type="search" id="q" class="search" placeholder="Search rules, text or sections" aria-label="Search findings">
     </div>
 
     {% if fleet %}

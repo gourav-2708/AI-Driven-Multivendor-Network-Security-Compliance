@@ -1,7 +1,7 @@
 {# Shared pieces. #}
 
 {% macro score_class(score) -%}
-  {%- if score is number -%}{{ '' if score >= 80 else ('warn' if score >= 50 else 'bad') }}{%- else -%}none{%- endif -%}
+  {%- if score is number -%}{{ 'ok' if score >= 80 else ('warn' if score >= 50 else 'bad') }}{%- else -%}none{%- endif -%}
 {%- endmacro %}
 
 {% macro verdict(score) -%}
@@ -9,19 +9,34 @@
 {%- endmacro %}
 
 {% macro arrow() -%}
-<svg width="20" height="14" viewBox="0 0 20 14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 7h17M12 1l6 6-6 6"/></svg>
+<svg class="arrow" width="22" height="14" viewBox="0 0 22 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 7h19M14 1l6 6-6 6"/></svg>
 {%- endmacro %}
 
-{% macro sev_cards(critical, high, medium, low) %}
-  <div class="stat-grid four">
-    {% for name, n in [('Critical', critical), ('High', high), ('Medium', medium), ('Low', low)] %}
-    <div class="stat-card compact reveal">
-      <div class="stat-num">{{ n }}</div>
-      <div class="stat-title"><i class="sev-dot {{ name|lower }}" aria-hidden="true"></i>{{ name }}</div>
-    </div>
-    {% endfor %}
-  </div>
-{% endmacro %}
+{# Orange progress ring, drawn clockwise from 12 o'clock; animates when revealed. #}
+{% macro ring(value, label) -%}
+<div class="ring reveal" style="--v:{{ [[value, 0]|max, 100]|min }}">
+  <svg viewBox="0 0 120 120" aria-hidden="true">
+    <circle class="ring-track" cx="60" cy="60" r="54"/>
+    <circle class="ring-bar" cx="60" cy="60" r="54" pathLength="100"/>
+  </svg>
+  <span class="ring-num">{{ label }}</span>
+</div>
+{%- endmacro %}
+
+{# Gradient bar with its value just past the end. #}
+{% macro bar(label, value, shown) -%}
+<div class="bar-row reveal" style="--v:{{ [[value, 0]|max, 100]|min }}">
+  <p class="bar-label">{{ label }}</p>
+  <div class="bar-line"><i class="bar"></i><b>{{ shown }}</b></div>
+</div>
+{%- endmacro %}
+
+{# Thin orange rule with a tick, set above a heading. #}
+{% macro rule_line() -%}<span class="rule-line" aria-hidden="true"></span>{%- endmacro %}
+
+{% macro shield() -%}
+<svg class="card-icon" width="34" height="40" viewBox="0 0 34 40" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 2 3 7v11c0 9.5 6 16.5 14 20 8-3.5 14-10.5 14-20V7L17 2Z"/><path d="m11 20 4.5 4.5L24 15"/></svg>
+{%- endmacro %}
 
 {% macro findings(items) %}
   {% if items %}
@@ -31,7 +46,7 @@
         data-text="{{ (f.rule_id ~ ' ' ~ f.description ~ ' ' ~ f.section)|lower }}">
       <details class="finding">
         <summary>
-          <span class="sev-label"><i class="sev-dot {{ f.severity|lower }}" aria-hidden="true"></i>{{ f.severity }}</span>
+          <span class="sev-label {{ f.severity|lower }}"><i aria-hidden="true"></i>{{ f.severity }}</span>
           <span class="rule">{{ f.rule_id }}</span>
           <span class="f-desc">{{ f.description }}</span>
           <span class="plus" aria-hidden="true"></span>

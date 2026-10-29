@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from collections import Counter
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
@@ -135,17 +136,101 @@ def list_history():
 
 
 # ---------------------------------------------------------------------------
+# Rule catalogue and history insights (home page)
+# ---------------------------------------------------------------------------
+_rules_cache = []
+
+
+def get_rules():
+    """The rule catalogue, read from the auditor itself (`--list-rules`)."""
+    if not _rules_cache:
+        try:
+            r = subprocess.run([str(BINARY), "--list-rules"], capture_output=True,
+                               text=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+        # Fixed-width columns: "%-11s %-9s %-15s %s" after a header row.
+        for line in r.stdout.splitlines()[1:]:
+            if len(line) > 38:
+                _rules_cache.append({"id": line[:11].strip(), "severity": line[12:21].strip(),
+                                     "category": line[22:37].strip(), "title": line[38:].strip()})
+    return _rules_cache
+
+
+def _report_devices(report):
+    if report.get("report_type") == "aggregate":
+        return report.get("devices", [])
+    return [report] if "hostname" in report else []
+
+
+def fleet_insights():
+    """Fleet numbers from saved history, using the latest result for each device."""
+    latest, audits, as_of = {}, 0, ""
+    for p in HISTORY_DIR.glob("*.json"):
+        try:
+            with open(p, encoding="utf-8") as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            continue
+        meta, devices = d.get("meta", {}), _report_devices(d.get("report", {}))
+        if not devices:
+            continue
+        ts = meta.get("timestamp", "")
+        audits += 1
+        as_of = max(as_of, ts)
+        # Findings are only complete when the audit was not severity-filtered.
+        complete = meta.get("severity", "low") == "low"
+        for dev in devices:
+            key = (dev.get("hostname"), dev.get("vendor"))
+            if key not in latest or ts > latest[key][0]:
+                latest[key] = (ts, dev, complete)
+
+    rows = list(latest.values())
+    n = len(rows)
+    rules = get_rules()
+    titles = {r["id"]: r for r in rules}
+    sev = {s: sum(dev.get(s, 0) for _, dev, _ in rows) for s in ("critical", "high", "medium", "low")}
+
+    full = [dev for _, dev, complete in rows if complete]
+    hits = Counter(rid for dev in full for rid in {f.get("rule_id") for f in dev.get("findings", [])})
+    n_rules = len(rules) or 17
+    top = [{"id": rid, "pct": round(100 * k / len(full)),
+            "title": titles.get(rid, {}).get("title", rid),
+            "severity": titles.get(rid, {}).get("severity", "")}
+           for rid, k in hits.most_common(6)]
+    passed = [1 - len({f.get("rule_id") for f in dev.get("findings", [])}) / n_rules for dev in full]
+
+    vendors = {}
+    for _, dev, _ in rows:
+        v = vendors.setdefault(dev.get("vendor", ""), [])
+        v.append(dev.get("score", 0))
+
+    def pct(k):
+        return round(100 * k / n) if n else 0
+
+    return {
+        "audits": audits, "devices": n, "as_of": as_of,
+        "avg_score": round(sum(dev.get("score", 0) for _, dev, _ in rows) / n) if n else 0,
+        "secure_pct": pct(sum(1 for _, dev, _ in rows if dev.get("score", 0) >= 80)),
+        "critical_pct": pct(sum(1 for _, dev, _ in rows if dev.get("critical", 0) > 0)),
+        "rules_passed_pct": round(100 * sum(passed) / len(passed)) if passed else 0,
+        "findings": sum(sev.values()), "sev": sev, "top_rules": top,
+        "by_vendor": {k: {"devices": len(v), "avg": round(sum(v) / len(v))} for k, v in vendors.items()},
+    }
+
+
+# ---------------------------------------------------------------------------
 # Pages
 # ---------------------------------------------------------------------------
 @app.context_processor
 def inject_globals():
     return {"binary_exists": BINARY.exists(), "max_upload_bytes": MAX_UPLOAD_BYTES,
-            "ephemeral_history": ON_VERCEL}
+            "ephemeral_history": ON_VERCEL, "rules": get_rules()}
 
 
 @app.route("/")
 def index():
-    return render_template("index.html", recent=list_history()[:8])
+    return render_template("index.html", recent=list_history()[:8], ins=fleet_insights())
 
 
 @app.route("/results/<aid>")

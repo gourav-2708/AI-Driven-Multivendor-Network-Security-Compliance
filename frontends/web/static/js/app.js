@@ -26,7 +26,7 @@
       name.className = 'name';
       name.textContent = f.name;
       const meta = document.createElement('span');
-      meta.className = 'small faint';
+      meta.className = 'size';
       meta.textContent = size(f.size);
       const rm = document.createElement('button');
       rm.type = 'button';
@@ -39,7 +39,7 @@
     });
     list.hidden = files.length === 0;
     run.disabled = files.length === 0;
-    run.firstChild.textContent = files.length > 1 ? 'Audit ' + files.length + ' files ' : 'Run audit ';
+    run.querySelector('.btn-label').textContent = files.length > 1 ? 'Audit ' + files.length + ' files' : 'Run audit';
   }
 
   function add(newFiles) {
