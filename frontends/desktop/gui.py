@@ -65,7 +65,7 @@ def run_audit(file_paths, vendor="auto", severity="low"):
     cmd = [str(BINARY), "--format", "json", "--severity", severity, "--no-color"]
     if vendor != "auto":
         cmd += ["--vendor", vendor]
-    cmd += [str(p) for p in file_paths]
+    cmd += ["--"] + [str(p) for p in file_paths]   # never treat a file name as an option
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
                            cwd=str(ROOT_DIR))
