@@ -62,19 +62,21 @@
         {% endfor %}
       </g>
     </svg>
+    {# Static final frame; home.js replays it as a live scan of three vendors. #}
     <div class="term" role="presentation">
-      <div class="term-bar"><i></i><i></i><i></i><span>core-router-01.cfg</span></div>
-      <pre><span class="c">! running-config</span>
-hostname core-router-01
-<span class="hit">enable password cisco123</span><em>AUTH-001</em>
-<span class="hit">snmp-server community public RO</span><em>SNMP-001</em>
-<span class="hit">ip http server</span><em>SVC-001</em>
-interface GigabitEthernet0/1
- description uplink-isp
- ip address 203.0.113.2 255.255.255.252
-line vty 0 4
-<span class="hit"> transport input telnet</span><em>AUTH-003</em>
-<span class="c">! score 2 / 100 · CRITICAL</span></pre>
+      <div class="term-bar">
+        <span class="lights"><i></i><i></i><i></i></span>
+        <span class="term-title">
+          <svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M1 1h6l4 4v8H1z M7 1v4h4"/></svg>
+          <span id="ht-file">core-router-01.cfg</span>
+        </span>
+        <b class="term-status done" id="ht-status">2 / 100</b>
+      </div>
+      <pre id="hero-term" data-rules="{{ rules|length or 17 }}"><span class="tl cmd">$ net-audit core-router-01.cfg</span><span class="tl n c">! running-config</span><span class="tl n">hostname core-router-01</span><span class="tl n hit">enable password C1sc0Lab<em>AUTH-001</em></span><span class="tl n hit">ip http server<em>SVC-001</em></span><span class="tl n hit">snmp-server community public RO<em>SNMP-001</em></span><span class="tl n hit">snmp-server community private RW<em>SNMP-001</em></span><span class="tl n">interface GigabitEthernet0/0</span><span class="tl n"> description WAN Uplink</span><span class="tl n"> ip address 203.0.113.1 255.255.255.252</span><span class="tl n hit">interface GigabitEthernet0/3<em>INTF-001</em></span><span class="tl c score">! score 2 / 100 · CRITICAL</span></pre>
+      <div class="term-foot">
+        <span class="term-progress"><i id="ht-progress" style="width:100%"></i></span>
+        <span id="ht-found">5 lines flagged · {{ rules|length or 17 }} rules</span>
+      </div>
     </div>
   </div>
   <div class="wrap hero-copy">
@@ -442,7 +444,7 @@ line vty 0 4
 <section class="sec-bleed" aria-labelledby="bleed-title">
   <div class="bleed-art" aria-hidden="true">
     <div class="bokeh">{% for i in range(9) %}<i style="--i:{{ i }}"></i>{% endfor %}</div>
-    <div class="scan"></div>
+    <div class="bleed-scan"></div>
     <svg class="topo" viewBox="0 0 800 600">
       <g stroke="#7fe0f8" stroke-opacity=".35" fill="none">
         <path d="M120 300 300 160 520 220 680 120M300 160 360 420 520 220 600 460 360 420 160 500 120 300"/>
