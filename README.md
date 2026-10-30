@@ -303,6 +303,26 @@ python frontends/desktop/gui.py        # or: frontends/desktop/launch_gui.bat
 `frontends/viewer/index.html` opens saved JSON reports in a browser with no
 server.
 
+### Audit history storage (MongoDB)
+
+The web dashboard saves each audit's report so the History page and home page
+numbers can use it. Where it goes depends on one setting:
+
+| `MONGODB_URI` | History is stored in |
+|---|---|
+| set | MongoDB: collection `audits` in the database named by the URI, else `MONGODB_DB`, else `net_audit` |
+| not set | JSON files in `frontends/web/history` (`/tmp/net-audit/history` on Vercel) |
+
+For local use, copy `.env.example` to `.env` (git-ignored) and fill in the
+connection string. Use a database user limited to read/write on this database,
+and make sure the cluster's network access list allows your IP address.
+
+Reports contain device host names, findings and uploaded file names, but never
+the uploaded configs themselves, which are deleted as soon as the audit finishes.
+Existing JSON history is not imported automatically. `GET /api/health` reports
+`storage` and `database`; if MongoDB is unreachable, it and the history-backed
+pages return HTTP 503.
+
 ### Deploying the web front-end to Vercel
 
 The repository is deployment-ready for Vercel's Flask preset. Nothing here
@@ -311,7 +331,7 @@ deploys automatically.
 | File | Role |
 |---|---|
 | `vercel.json` | Flask preset, build command, 30 s function limit, files to bundle/exclude, security headers |
-| `pyproject.toml` | Python ≥ 3.12, `Flask>=3.1,<4`, and the entrypoint `index:app` |
+| `pyproject.toml` | Python ≥ 3.12, `Flask>=3.1,<4`, `pymongo>=4.8,<5`, and the entrypoint `index:app` |
 | `.python-version` | Pins Python 3.12 |
 | `index.py` | Re-exports the Flask `app` from `frontends/web/app.py` |
 | `scripts/vercel-build.sh` | On Vercel's Linux image: installs gcc/make with `dnf` if missing, compiles `build/release/net-audit`, runs the full test suite, and copies `frontends/web/static` to `public/static` for the CDN |
@@ -325,17 +345,21 @@ vercel --prod   # production
 ```
 
 Or import the repository in the Vercel dashboard. The settings above are read
-from the repository, so no dashboard configuration is needed. After deploying,
-`GET /api/health` returns `{"ok": true}` when the auditor binary is present.
+from the repository; the only dashboard setting is the optional `MONGODB_URI`
+environment variable for permanent history. Vercel's outbound IP addresses
+change, so a MongoDB Atlas network access list must allow them (typically
+`0.0.0.0/0` on plans without private networking). After deploying,
+`GET /api/health` returns `{"ok": true}` when the auditor binary is present and
+the database, if configured, is reachable.
 
 **Reproduce the build locally** on Linux or macOS with `bash scripts/vercel-build.sh`.
 
 **Behaviour on Vercel** (when the `VERCEL` environment variable is set):
 
-* **History is temporary.** Functions can write only to `/tmp`, so audit
-  history lives in `/tmp/net-audit` and resets when an instance is recycled.
-  The History page says so. Set `NET_AUDIT_DATA_DIR` to change the location.
-  Persistent history would need external storage.
+* **History is temporary unless `MONGODB_URI` is set.** Functions can write only
+  to `/tmp`, so without MongoDB audit history lives in `/tmp/net-audit` and
+  resets when an instance is recycled. The History page says so. Set
+  `NET_AUDIT_DATA_DIR` to change the location.
 * **Uploads** are limited to 4 MB per audit, below Vercel's 4.5 MB request
   cap, so users get a clear message. Uploaded configs are deleted as soon as
   the audit finishes.

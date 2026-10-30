@@ -28,12 +28,28 @@ from werkzeug.utils import secure_filename
 ON_VERCEL   = bool(os.environ.get("VERCEL"))
 BASE_DIR    = Path(__file__).resolve().parent
 ROOT_DIR    = BASE_DIR.parent.parent                      # repository root
+
+# Local settings such as MONGODB_URI may live in a git-ignored .env at the root.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT_DIR / ".env")
+except ImportError:
+    pass
+
 BINARY_NAME = "net-audit.exe" if sys.platform == "win32" else "net-audit"
 # `make` puts the CLI in build/release/; NET_AUDIT_BIN overrides the location.
 BINARY      = Path(os.environ.get("NET_AUDIT_BIN") or ROOT_DIR / "build" / "release" / BINARY_NAME)
 
-# Uploads and audit history. Serverless functions may only write under /tmp,
+# Audit history goes to MongoDB when MONGODB_URI is set, otherwise to JSON files.
+MONGODB_URI = os.environ.get("MONGODB_URI", "").strip()
+MONGODB_DB  = os.environ.get("MONGODB_DB") or "net_audit"  # when the URI names no database
+if MONGODB_URI:
+    from pymongo import DESCENDING, MongoClient
+    from pymongo.errors import PyMongoError
+
+# Uploads and file-based history. Serverless functions may only write under /tmp,
 # which is per-instance and temporary; NET_AUDIT_DATA_DIR overrides everywhere.
+EPHEMERAL_HISTORY = ON_VERCEL and not MONGODB_URI
 DATA_DIR    = Path(os.environ.get("NET_AUDIT_DATA_DIR")
                    or ("/tmp/net-audit" if ON_VERCEL else BASE_DIR))
 UPLOADS_DIR = DATA_DIR / "uploads"
@@ -53,8 +69,10 @@ if BINARY.exists() and sys.platform != "win32" and not os.access(BINARY, os.X_OK
 MAX_UPLOAD_BYTES = 4 * 1024 * 1024 if ON_VERCEL else 10 * 1024 * 1024
 AUDIT_TIMEOUT_S  = 25          # below the 30 s maxDuration in vercel.json
 HISTORY_LIMIT    = 50
+INSIGHTS_LIMIT   = 500         # newest MongoDB audits behind the home page numbers
+MONGO_TIMEOUT_MS = 5000        # fail fast: inside the 30 s function limit too
 
-VENDORS    = {"auto", "cisco", "juniper", "fortinet"}
+VENDORS   = {"auto", "cisco", "juniper", "fortinet"}
 SEVERITIES = {"low", "medium", "high", "critical"}
 ALLOWED_EXTENSIONS = {".cfg", ".conf", ".txt", ".log"}
 AUDIT_ID   = re.compile(r"^[0-9a-f]{8}$")
@@ -101,37 +119,91 @@ def _history_path(aid):
     return HISTORY_DIR / f"{aid}.json" if AUDIT_ID.match(aid or "") else None
 
 
+_audits = None
+
+
+def _audits_collection():
+    """The MongoDB collection; the client is created once and reused between requests."""
+    global _audits
+    if _audits is None:
+        client = MongoClient(MONGODB_URI, appname="net-audit", maxPoolSize=5,
+                             serverSelectionTimeoutMS=MONGO_TIMEOUT_MS,
+                             connectTimeoutMS=MONGO_TIMEOUT_MS)
+        collection = client.get_default_database(default=MONGODB_DB)["audits"]
+        collection.create_index([("created_at", DESCENDING)])
+        _audits = collection
+    return _audits
+
+
 def save_history(aid, meta, report):
+    if MONGODB_URI:
+        # created_at orders audits written from different time zones; meta.timestamp
+        # stays the local time shown to users.
+        _audits_collection().insert_one({"_id": aid, "created_at": datetime.now(timezone.utc),
+                                         "meta": meta, "report": report})
+        return
     with open(_history_path(aid), "w", encoding="utf-8") as f:
         json.dump({"meta": meta, "report": report}, f, indent=2, ensure_ascii=False)
 
 
 def load_history(aid):
     p = _history_path(aid)
-    if not p or not p.exists():
+    if not p:
+        return None
+    if MONGODB_URI:
+        return _audits_collection().find_one({"_id": aid}, {"_id": 0, "created_at": 0})
+    if not p.exists():
         return None
     with open(p, encoding="utf-8") as f:
         return json.load(f)
 
 
-def list_history():
-    entries = []
+def delete_history(aid):
+    """Remove an audit. Returns False when the id is malformed."""
+    p = _history_path(aid)
+    if not p:
+        return False
+    if MONGODB_URI:
+        _audits_collection().delete_one({"_id": aid})
+    elif p.exists():
+        p.unlink()
+    return True
+
+
+def _stored_audits(limit, fields=None):
+    """Yield (id, document) for saved audits; MongoDB returns only the newest `limit`."""
+    if MONGODB_URI:
+        cursor = _audits_collection().find({}, fields).sort("created_at", DESCENDING).limit(limit)
+        for d in cursor:
+            yield d["_id"], d
+        return
     for p in HISTORY_DIR.glob("*.json"):
         try:
             with open(p, encoding="utf-8") as f:
-                d = json.load(f)
-            m, r = d.get("meta", {}), d.get("report", {})
-            entries.append({
-                "id": p.stem, "timestamp": m.get("timestamp", ""),
-                "files": m.get("files", []), "vendor": m.get("vendor", "auto"),
-                "devices": r.get("devices_audited", 1 if "hostname" in r else 0),
-                "avg_score": r.get("avg_score", r.get("score", "?")),
-                "report_type": r.get("report_type", "device"),
-                "error": r.get("error"),
-            })
+                yield p.stem, json.load(f)
         except (OSError, ValueError):
             continue
-    entries.sort(key=lambda e: e["timestamp"], reverse=True)   # ids are random
+
+
+# The report fields list_history reads; findings can be large and are not needed.
+_SUMMARY_FIELDS = {"created_at": 1, "meta": 1, "report.devices_audited": 1, "report.hostname": 1,
+                   "report.avg_score": 1, "report.score": 1, "report.report_type": 1, "report.error": 1}
+
+
+def list_history():
+    entries = []
+    for aid, d in _stored_audits(HISTORY_LIMIT, _SUMMARY_FIELDS):
+        m, r = d.get("meta", {}), d.get("report", {})
+        entries.append({
+            "id": aid, "timestamp": m.get("timestamp", ""),
+            "files": m.get("files", []), "vendor": m.get("vendor", "auto"),
+            "devices": r.get("devices_audited", 1 if "hostname" in r else 0),
+            "avg_score": r.get("avg_score", r.get("score", "?")),
+            "report_type": r.get("report_type", "device"),
+            "error": r.get("error"),
+        })
+    if not MONGODB_URI:
+        entries.sort(key=lambda e: e["timestamp"], reverse=True)   # ids are random
     return entries[:HISTORY_LIMIT]
 
 
@@ -165,25 +237,22 @@ def _report_devices(report):
 
 def fleet_insights():
     """Fleet numbers from saved history, using the latest result for each device."""
-    latest, audits, as_of = {}, 0, ""
-    for p in HISTORY_DIR.glob("*.json"):
-        try:
-            with open(p, encoding="utf-8") as f:
-                d = json.load(f)
-        except (OSError, ValueError):
-            continue
+    latest, audits, as_of, newest = {}, 0, "", None
+    for _, d in _stored_audits(INSIGHTS_LIMIT):
         meta, devices = d.get("meta", {}), _report_devices(d.get("report", {}))
         if not devices:
             continue
         ts = meta.get("timestamp", "")
+        order = d.get("created_at", ts)      # file-based history has only the timestamp
         audits += 1
-        as_of = max(as_of, ts)
+        if newest is None or order > newest:
+            newest, as_of = order, ts
         # Findings are only complete when the audit was not severity-filtered.
         complete = meta.get("severity", "low") == "low"
         for dev in devices:
             key = (dev.get("hostname"), dev.get("vendor"))
-            if key not in latest or ts > latest[key][0]:
-                latest[key] = (ts, dev, complete)
+            if key not in latest or order > latest[key][0]:
+                latest[key] = (order, dev, complete)
 
     rows = list(latest.values())
     n = len(rows)
@@ -225,7 +294,7 @@ def fleet_insights():
 @app.context_processor
 def inject_globals():
     return {"binary_exists": BINARY.exists(), "max_upload_bytes": MAX_UPLOAD_BYTES,
-            "ephemeral_history": ON_VERCEL, "rules": get_rules()}
+            "ephemeral_history": EPHEMERAL_HISTORY, "rules": get_rules()}
 
 
 @app.route("/")
@@ -251,8 +320,18 @@ def history_page():
 # ---------------------------------------------------------------------------
 @app.route("/api/health")
 def api_health():
-    ok = BINARY.exists()
-    return jsonify({"ok": ok, "engine": ok, "ephemeral_history": ON_VERCEL}), (200 if ok else 503)
+    engine = BINARY.exists()
+    database = True
+    if MONGODB_URI:
+        try:
+            _audits_collection().database.command("ping")
+        except PyMongoError as err:
+            app.logger.error("MongoDB health check failed: %s", type(err).__name__)
+            database = False
+    ok = engine and database
+    return jsonify({"ok": ok, "engine": engine, "database": database,
+                    "storage": "mongodb" if MONGODB_URI else "files",
+                    "ephemeral_history": EPHEMERAL_HISTORY}), (200 if ok else 503)
 
 
 @app.route("/api/audit", methods=["POST"])
@@ -308,11 +387,8 @@ def api_result(aid):
 
 @app.route("/api/result/<aid>", methods=["DELETE"])
 def api_delete(aid):
-    p = _history_path(aid)
-    if not p:
+    if not delete_history(aid):
         return jsonify({"error": "Not found"}), 404
-    if p.exists():
-        p.unlink()
     return jsonify({"ok": True})
 
 
@@ -369,6 +445,15 @@ def api_export(aid):
 def too_large(_):
     mb = MAX_UPLOAD_BYTES // (1024 * 1024)
     return jsonify({"error": f"Upload too large: the limit is {mb} MB per audit."}), 413
+
+
+if MONGODB_URI:
+    @app.errorhandler(PyMongoError)
+    def database_error(err):
+        # Log only the error type: messages can include cluster host names.
+        app.logger.error("MongoDB error: %s", type(err).__name__)
+        msg = "The audit history database is unavailable. Please try again shortly."
+        return (jsonify({"error": msg}), 503) if request.path.startswith("/api/") else (msg, 503)
 
 
 if __name__ == "__main__":

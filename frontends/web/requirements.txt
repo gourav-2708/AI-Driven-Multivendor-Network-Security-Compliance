@@ -1,2 +1,5 @@
 # Local development dependencies (same as pyproject.toml)
 Flask>=3.1,<4
+pymongo>=4.8,<5
+# Loads MONGODB_URI from a local .env; not needed on Vercel
+python-dotenv>=1,<2

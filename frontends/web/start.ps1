@@ -43,8 +43,8 @@ if (-not $python) {
 Write-Host "Using: $python $(& $python --version 2>&1)" -ForegroundColor Green
 
 # 3. Install Flask
-Write-Host "Installing Flask..." -ForegroundColor Cyan
-& $python -m pip install flask --quiet --upgrade
+Write-Host "Installing dependencies..." -ForegroundColor Cyan
+& $python -m pip install -r (Join-Path $webappDir "requirements.txt") --quiet --upgrade
 
 # 4. Build the binary if needed (output: build\release\net-audit.exe)
 $repoRoot = Split-Path (Split-Path $webappDir)

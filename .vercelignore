@@ -5,6 +5,9 @@ public/
 *.o
 *.d
 
+# Never upload local secrets; set MONGODB_URI in the Vercel dashboard instead
+.env
+
 # Never upload local audit data: uploaded configs and their reports
 frontends/web/history/
 frontends/web/uploads/
