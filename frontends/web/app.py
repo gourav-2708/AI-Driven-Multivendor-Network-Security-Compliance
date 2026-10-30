@@ -70,7 +70,10 @@ MAX_UPLOAD_BYTES = 4 * 1024 * 1024 if ON_VERCEL else 10 * 1024 * 1024
 AUDIT_TIMEOUT_S  = 25          # below the 30 s maxDuration in vercel.json
 HISTORY_LIMIT    = 50
 INSIGHTS_LIMIT   = 500         # newest MongoDB audits behind the home page numbers
-MONGO_TIMEOUT_MS = 5000        # fail fast: inside the 30 s function limit too
+# A stalled connection attempt gets cut off and retried within the overall wait,
+# so the wait must be several times the per-attempt limit.
+MONGO_CONNECT_TIMEOUT_MS = 5000
+MONGO_SELECT_TIMEOUT_MS  = 20000   # still inside the 30 s function limit
 
 VENDORS   = {"auto", "cisco", "juniper", "fortinet"}
 SEVERITIES = {"low", "medium", "high", "critical"}
@@ -127,8 +130,8 @@ def _audits_collection():
     global _audits
     if _audits is None:
         client = MongoClient(MONGODB_URI, appname="net-audit", maxPoolSize=5,
-                             serverSelectionTimeoutMS=MONGO_TIMEOUT_MS,
-                             connectTimeoutMS=MONGO_TIMEOUT_MS)
+                             serverSelectionTimeoutMS=MONGO_SELECT_TIMEOUT_MS,
+                             connectTimeoutMS=MONGO_CONNECT_TIMEOUT_MS)
         collection = client.get_default_database(default=MONGODB_DB)["audits"]
         collection.create_index([("created_at", DESCENDING)])
         _audits = collection
