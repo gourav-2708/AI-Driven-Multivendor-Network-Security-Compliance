@@ -119,7 +119,7 @@
       {% else %}
         {% for key, name in [('cisco', 'Audit a Cisco IOS config'), ('juniper', 'Audit a Juniper JunOS config'), ('fortinet', 'Audit a Fortinet FortiOS config'), ('auto', 'Audit a whole fleet at once')] %}
         <a class="reco" href="#audit" data-vendor-pick="{{ key }}">
-          <span class="reco-thumb theme-{{ loop.index }}"><b>{{ loop.index }}</b><small>step</small></span>
+          <span class="reco-thumb"><b>{{ loop.index }}</b><small>step</small></span>
           <span class="reco-body">
             <span class="reco-title">{{ name }}</span>
             <span class="reco-link">Start now</span>
