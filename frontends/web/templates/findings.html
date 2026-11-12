@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_macros.html" import rule_line, wf_item with context %}
+{% block title %}Findings{% endblock %}
+
+{% block subnav %}
+{% set st = args.get('status', 'active') %}
+<a href="{{ url_for('findings_page') }}" class="{{ 'active' if st == 'active' }}">To do</a>
+{% for key in ['open', 'assigned', 'risk_accepted', 'fixed', 'verified'] %}
+<a href="{{ url_for('findings_page', status=key) }}" class="{{ 'active' if st == key }}">{{ status_label[key] }} · {{ counts[key] }}</a>
+{% endfor %}
+{% endblock %}
+{% block subnav_cta %}{% endblock %}
+
+{% block content %}
+<section class="page-top compact stripes-tr">
+  <div class="wrap">
+    {{ rule_line() }}
+    <p class="eyebrow">Finding workflow</p>
+    <h1>From found <span style="color:var(--orange)">to verified.</span></h1>
+    <div class="meta-row">
+      <span>A finding is verified as fixed, or reopened, by the next audit of its device.</span>
+    </div>
+  </div>
+</section>
+
+<section class="sec-app">
+  <div class="wrap">
+    <form class="filters" method="get">
+      <input type="hidden" name="status" value="{{ args.get('status', 'active') }}">
+      <input class="search" type="search" name="q" value="{{ args.get('q', '') }}" placeholder="Search device, rule, text or assignee" aria-label="Search findings">
+      <select name="severity" aria-label="Severity" data-autosubmit>
+        <option value="">Any severity</option>
+        {% for s in ['critical', 'high', 'medium', 'low'] %}<option value="{{ s }}" {{ 'selected' if args.get('severity') == s }}>{{ s|title }}</option>{% endfor %}
+      </select>
+      <label class="check"><input type="checkbox" name="mine" value="1" {{ 'checked' if args.get('mine') }} data-autosubmit> Assigned to me</label>
+      <button class="btn btn-ghost btn-sm" type="submit">Apply</button>
+      <span class="muted">{{ shown }} finding{{ '' if shown == 1 else 's' }}{% if shown > limit %}, first {{ limit }} shown{% endif %}</span>
+    </form>
+
+    {% if findings %}
+    <ul class="wf-list">
+      {% for f in findings %}{{ wf_item(f, members, tickets, request.full_path.rstrip('?')) }}{% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty"><strong>Nothing here</strong>No finding matches. Findings appear after an audit; change the filters to see other states.</div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

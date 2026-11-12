@@ -38,6 +38,41 @@
 <svg class="card-icon" width="34" height="40" viewBox="0 0 34 40" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 2 3 7v11c0 9.5 6 16.5 14 20 8-3.5 14-10.5 14-20V7L17 2Z"/><path d="m11 20 4.5 4.5L24 15"/></svg>
 {%- endmacro %}
 
+{# Framework controls a finding maps to, as chips. #}
+{% macro controls(f) -%}
+  {%- set mapping = f.frameworks if f.frameworks is defined and f.frameworks is not none else {} -%}
+  {%- set ns = namespace(any=false) -%}
+  {%- for fw in fw_list if mapping.get(fw.key) %}{% set ns.any = true %}{% endfor -%}
+  {%- if ns.any %}
+  <dl><dt>Controls</dt><dd class="chips">
+    {%- for fw in fw_list if mapping.get(fw.key) -%}
+    <span class="chip" title="{{ fw.title }}"><b>{{ fw.label }}</b>{{ mapping[fw.key]|join(', ') }}</span>
+    {%- endfor -%}
+  </dd></dl>
+  {%- endif -%}
+{%- endmacro %}
+
+{# Small inline score-over-time chart. `points` is a list with a `score` each. #}
+{% macro trend_chart(points, label) -%}
+<figure class="trend" aria-label="{{ label }}">
+  {% if points|length >= 2 %}
+  <svg viewBox="0 0 600 140" preserveAspectRatio="none" role="img" aria-hidden="true">
+    <line x1="8" x2="592" y1="34.8" y2="34.8" class="trend-grid"/><line x1="8" x2="592" y1="70" y2="70" class="trend-grid"/>
+    <polyline points="{{ chart(points) }}" class="trend-line"/>
+  </svg>
+  <figcaption><span>{{ (points[0].date if points[0].date is defined else points[0].at)|day }} · {{ points[0].score }}</span><span>{{ label }}</span><span>{{ (points[-1].date if points[-1].date is defined else points[-1].at)|day }} · {{ points[-1].score }}</span></figcaption>
+  {% else %}
+  <p class="muted">A trend appears after the second audit.</p>
+  {% endif %}
+</figure>
+{%- endmacro %}
+
+{% macro status_badge(status) -%}
+<span class="badge st-{{ status }}">{{ status_label.get(status, status) }}</span>
+{%- endmacro %}
+
+{% macro csrf() -%}<input type="hidden" name="_csrf" value="{{ csrf_token() }}">{%- endmacro %}
+
 {% macro findings(items) %}
   {% if items %}
   <ul class="findings" data-findings>
@@ -54,6 +89,7 @@
         <div class="f-body">
           <dl><dt>Where</dt><dd>{{ f.section }}{% if f.line is defined and f.line > 0 %} · line {{ f.line }}{% endif %}</dd></dl>
           <dl><dt>How to fix</dt><dd>{{ f.remediation }}</dd></dl>
+          {{ controls(f) }}
         </div>
       </details>
     </li>
@@ -62,4 +98,88 @@
   {% else %}
   <div class="empty"><strong>No findings</strong>Nothing at or above the selected severity.</div>
   {% endif %}
+{% endmacro %}
+
+{# One finding with its state, history and the workflow actions. #}
+{% macro wf_item(f, members, tickets, next) %}
+<li>
+  <details class="wf" id="f-{{ f._id }}">
+    <summary>
+      <span class="sev {{ f.severity|lower }}">{{ f.severity }}</span>
+      <span class="rule">{{ f.rule_id }}</span>
+      <span class="host">{{ f.hostname }}<small>{{ f.section }}</small></span>
+      <span class="desc">{{ f.description }}</span>
+      {{ status_badge(f.status) }}
+    </summary>
+    <div class="wf-body">
+      <div>
+        <dl><dt>Where</dt><dd><a class="link-u" href="{{ url_for('device_page', dev_id=f.device_id) }}">{{ f.hostname }}</a> · {{ f.section }}{% if f.line and f.line > 0 %} · line {{ f.line }}{% endif %}</dd></dl>
+        <dl><dt>How to fix</dt><dd>{{ f.remediation }}</dd></dl>
+        {{ controls(f) }}
+        <dl><dt>Seen</dt><dd>First {{ f.first_seen_at|when }} · last {{ f.last_seen_at|when }}{% if f.resolved_at %} · resolved {{ f.resolved_at|when }}{% endif %}</dd></dl>
+        {% if f.assignee %}<dl><dt>Assigned to</dt><dd>{{ f.assignee }}</dd></dl>{% endif %}
+        {% if f.risk %}<dl><dt>Risk accepted</dt><dd>Until {{ f.risk.expires_at|day }} by {{ f.risk.accepted_by }}: {{ f.risk.reason }}</dd></dl>{% endif %}
+        {% if f.ticket %}<dl><dt>Ticket</dt><dd><a class="link-u" href="{{ f.ticket.url }}" rel="noopener noreferrer" target="_blank">{{ f.ticket.key }}</a> ({{ f.ticket.system }})</dd></dl>{% endif %}
+        <dl><dt>History</dt><dd>
+          <ul class="history">
+            {% for h in f.history[-8:]|reverse %}
+            <li><b>{{ h.action|replace('_', ' ') }}</b> · {{ h.by }} · {{ h.at|when }}{% if h.note %} · {{ h.note }}{% endif %}</li>
+            {% endfor %}
+          </ul>
+        </dd></dl>
+      </div>
+      {% if can('auditor') and f.status != 'verified' %}
+      <div class="wf-actions">
+        {% set post = url_for('finding_action', fid=f._id) %}
+        <form class="row" method="post" action="{{ post }}">
+          {{ csrf() }}<input type="hidden" name="next" value="{{ next }}"><input type="hidden" name="action" value="assign">
+          <select name="assignee" aria-label="Assign to">
+            <option value="">Nobody</option>
+            {% for m in members if m.active %}
+            <option value="{{ m.email }}" {{ 'selected' if m.email == f.assignee }}>{{ m.name or m.email }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-ghost btn-sm" type="submit">Assign</button>
+        </form>
+        {% if f.status in ('open', 'assigned') %}
+        <form method="post" action="{{ post }}">
+          {{ csrf() }}<input type="hidden" name="next" value="{{ next }}"><input type="hidden" name="action" value="accept_risk">
+          <textarea class="input" name="reason" rows="2" minlength="10" maxlength="1000" placeholder="Why this risk is accepted" required></textarea>
+          <label class="lbl">Expires <input class="input" type="date" name="expires" required></label>
+          <button class="btn btn-ghost btn-sm" type="submit">Accept risk until that date</button>
+        </form>
+        {% endif %}
+        {% if f.status in ('open', 'assigned', 'risk_accepted') %}
+        <form class="row" method="post" action="{{ post }}">
+          {{ csrf() }}<input type="hidden" name="next" value="{{ next }}"><input type="hidden" name="action" value="fix">
+          <input class="input" name="note" maxlength="500" placeholder="What was changed (optional)">
+          <button class="btn btn-ghost btn-sm" type="submit">Mark fixed</button>
+        </form>
+        {% endif %}
+        {% if f.status in ('risk_accepted', 'fixed') %}
+        <form class="row" method="post" action="{{ post }}">
+          {{ csrf() }}<input type="hidden" name="next" value="{{ next }}"><input type="hidden" name="action" value="reopen">
+          <input class="input" name="note" maxlength="500" placeholder="Reason (optional)">
+          <button class="btn btn-ghost btn-sm" type="submit">Reopen</button>
+        </form>
+        {% endif %}
+        {% if tickets and not f.ticket %}
+        <form class="row" method="post" action="{{ post }}">
+          {{ csrf() }}<input type="hidden" name="next" value="{{ next }}"><input type="hidden" name="action" value="ticket">
+          <select name="system" aria-label="Ticket system">
+            {% for key, name in tickets %}<option value="{{ key }}">{{ name }}</option>{% endfor %}
+          </select>
+          <button class="btn btn-ghost btn-sm" type="submit">Create ticket</button>
+        </form>
+        {% endif %}
+        <form class="row" method="post" action="{{ post }}">
+          {{ csrf() }}<input type="hidden" name="next" value="{{ next }}"><input type="hidden" name="action" value="comment">
+          <input class="input" name="note" maxlength="500" placeholder="Add a comment" required>
+          <button class="btn btn-ghost btn-sm" type="submit">Comment</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </details>
+</li>
 {% endmacro %}

@@ -11,11 +11,20 @@
 extern const VendorParser PARSER_CISCO_IOS;
 extern const VendorParser PARSER_JUNIPER_JUNOS;
 extern const VendorParser PARSER_FORTINET_FORTIOS;
+extern const VendorParser PARSER_PALOALTO_PANOS;
+extern const VendorParser PARSER_ARISTA_EOS;
+extern const VendorParser PARSER_CISCO_NXOS;
+extern const VendorParser PARSER_CISCO_ASA;
 
+/* Order matters only for ties in auto-detection: the earlier parser wins. */
 static const VendorParser *const k_builtin[] = {
     &PARSER_CISCO_IOS,
     &PARSER_JUNIPER_JUNOS,
     &PARSER_FORTINET_FORTIOS,
+    &PARSER_PALOALTO_PANOS,
+    &PARSER_ARISTA_EOS,
+    &PARSER_CISCO_NXOS,
+    &PARSER_CISCO_ASA,
 };
 
 /* -- Registry --------------------------------------------------------------- */

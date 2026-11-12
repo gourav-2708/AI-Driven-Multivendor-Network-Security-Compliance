@@ -28,6 +28,9 @@ frontends/web/uploads/*
 frontends/web/history/*
 !frontends/web/uploads/.gitkeep
 !frontends/web/history/.gitkeep
+frontends/web/work/
+frontends/web/net-audit.db*
+frontends/web/secret.key
 
 # --- OS files ---
 .DS_Store

@@ -11,7 +11,13 @@
  *                    "avg_score", "total_critical", "total_high",
  *                    "total_medium", "total_low" }
  *   finding:       { "rule_id", "severity", "section", "line",
- *                    "description", "remediation" }
+ *                    "description", "remediation",
+ *                    "frameworks": { "<framework key>": [ "<control>" ] } }
+ *
+ * The rule catalogue (--list-rules --format json) is a separate document:
+ *   { "version", "frameworks": [ { "key", "title", "label" } ],
+ *     "rules": [ { "id", "severity", "category", "category_code", "title",
+ *                  "description", "remediation", "frameworks": {...} } ] }
  */
 #include "netaudit/safe_str.h"
 #include "report_internal.h"
@@ -51,6 +57,26 @@ static void kv_int(FILE *fp, int indent, const char *key, int val, bool last)
     fprintf(fp, ": %d%s", val, last ? "\n" : ",\n");
 }
 
+/* "frameworks": { "cis_v8": ["4.6", "12.6"], ... } - every framework is
+ * present, with an empty array when the rule maps to nothing in it. */
+static void frameworks(FILE *fp, int indent, const Rule *rule)
+{
+    fprintf(fp, "%*s\"frameworks\": {", indent, "");
+    for (int f = 0; f < FW_COUNT; f++) {
+        fputs(f ? ", " : " ", fp);
+        json_string(fp, framework_key((Framework)f));
+        fputs(": [", fp);
+        const char *cursor = NULL;
+        char id[NA_MAX_CONTROL];
+        for (int k = 0; rule_next_control(rule, (Framework)f, &cursor, id, sizeof(id)); k++) {
+            if (k) fputs(", ", fp);
+            json_string(fp, id);
+        }
+        fputc(']', fp);
+    }
+    fputs(" }\n", fp);
+}
+
 static void finding(FILE *fp, int indent, const Finding *f, bool last)
 {
     fprintf(fp, "%*s{\n", indent, "");
@@ -59,7 +85,8 @@ static void finding(FILE *fp, int indent, const Finding *f, bool last)
     kv_str(fp, indent + 2, "section",     f->section, false);
     kv_int(fp, indent + 2, "line",        f->line_number, false);
     kv_str(fp, indent + 2, "description", f->description, false);
-    kv_str(fp, indent + 2, "remediation", f->remediation, true);
+    kv_str(fp, indent + 2, "remediation", f->remediation, false);
+    frameworks(fp, indent + 2, f->rule);
     fprintf(fp, "%*s}%s\n", indent, "", last ? "" : ",");
 }
 
@@ -121,6 +148,38 @@ static void json_end(ReportSession *s)
     kv_int(fp, 2, "total_medium",    s->sev_totals[SEV_MEDIUM], false);
     kv_int(fp, 2, "total_low",       s->sev_totals[SEV_LOW], true);
     fputs("}\n", fp);
+}
+
+void report_rule_catalogue_json(FILE *fp, const char *version)
+{
+    fputs("{\n", fp);
+    kv_str(fp, 2, "version", version, false);
+    fputs("  \"frameworks\": [\n", fp);
+    for (int f = 0; f < FW_COUNT; f++) {
+        fputs("    { \"key\": ", fp);
+        json_string(fp, framework_key((Framework)f));
+        fputs(", \"title\": ", fp);
+        json_string(fp, framework_title((Framework)f));
+        fputs(", \"label\": ", fp);
+        json_string(fp, framework_label((Framework)f));
+        fprintf(fp, " }%s\n", f + 1 < FW_COUNT ? "," : "");
+    }
+    fputs("  ],\n  \"rules\": [\n", fp);
+    size_t n = rules_count();
+    for (size_t i = 0; i < n; i++) {
+        const Rule *r = rules_at(i);
+        fputs("    {\n", fp);
+        kv_str(fp, 6, "id",            r->id, false);
+        kv_str(fp, 6, "severity",      severity_label(r->severity), false);
+        kv_str(fp, 6, "category",      rule_category_title(r->category), false);
+        kv_str(fp, 6, "category_code", rule_category_code(r->category), false);
+        kv_str(fp, 6, "title",         r->title, false);
+        kv_str(fp, 6, "description",   r->description, false);
+        kv_str(fp, 6, "remediation",   r->remediation, false);
+        frameworks(fp, 6, r);
+        fprintf(fp, "    }%s\n", i + 1 < n ? "," : "");
+    }
+    fputs("  ]\n}\n", fp);
 }
 
 const ReportFormatOps REPORT_OPS_JSON = {

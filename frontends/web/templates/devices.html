@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% from "_macros.html" import score_class, arrow, rule_line, trend_chart with context %}
+{% block title %}Devices{% endblock %}
+
+{% block subnav %}
+<a href="#fleet" class="active">Fleet</a>
+<a href="#inventory">Inventory</a>
+<a href="{{ url_for('alerts_page') }}">Drift alerts</a>
+<a href="{{ url_for('sources_page') }}">Sources</a>
+{% endblock %}
+
+{% block content %}
+<section class="page-top compact stripes-tr">
+  <div class="wrap">
+    {{ rule_line() }}
+    <p class="eyebrow">Device inventory</p>
+    <h1>Every device, <span style="color:var(--orange)">always watched.</span></h1>
+    <div class="meta-row">
+      <span>{{ total }} device{{ '' if total == 1 else 's' }}</span>
+      {% if ins.as_of %}<span>Last audit {{ ins.as_of }} UTC</span>{% endif %}
+      <div class="dl"><a class="btn btn-ghost btn-sm" href="{{ url_for('report_executive') }}" target="_blank" rel="noopener">Executive report (PDF)</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec-app" id="fleet">
+  <div class="wrap stack">
+    {% if total %}
+    <div class="tiles">
+      <div class="tile-s {{ score_class(ins.avg_score) }}"><b>{{ ins.avg_score }}<small> / 100</small></b><span>Average score</span></div>
+      <div class="tile-s"><b>{{ ins.secure_pct }}<small> %</small></b><span>Devices at 80 or more</span></div>
+      <div class="tile-s {{ 'bad' if ins.sev.critical }}"><b>{{ ins.sev.critical }}</b><span>Critical findings</span></div>
+      <div class="tile-s"><b>{{ ins.findings }}</b><span>Findings in total</span></div>
+      <a class="tile-s" href="{{ url_for('alerts_page') }}"><b>{{ open_alerts }}</b><span>Open drift alerts</span></a>
+    </div>
+    <div class="panel">
+      <h2>Fleet score over time <small>average of the latest score of every device, per day</small></h2>
+      {{ trend_chart(trend, 'average device score') }}
+    </div>
+    {% endif %}
+
+    <div id="inventory">
+      <form class="filters" method="get">
+        <input class="search" type="search" name="q" value="{{ q }}" placeholder="Search name, type, site or owner" aria-label="Search devices">
+        <button class="btn btn-ghost btn-sm" type="submit">Search</button>
+        {% if q %}<a class="link-u" href="{{ url_for('devices_page') }}">Clear</a>{% endif %}
+      </form>
+      {% if devices %}
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>Device</th><th>Type</th><th>Site</th><th>Owner</th><th class="num">Score</th><th class="num">Change</th><th class="num">Crit</th><th class="num">High</th><th class="num">Med</th><th class="num">Low</th><th>Last audit</th></tr></thead>
+          <tbody>
+            {% for d in devices %}
+            <tr>
+              <td><a class="strong" href="{{ url_for('device_page', dev_id=d._id) }}">{{ d.hostname }}</a>{% if d.version %}<small>{{ d.version }}</small>{% endif %}</td>
+              <td>{{ vendor_name(d.vendor) }}</td>
+              <td>{{ d.site or '—' }}</td>
+              <td>{{ d.owner or '—' }}</td>
+              <td class="num"><span class="score {{ score_class(d.score) }}">{{ d.score }}</span></td>
+              <td class="num">{% if d.prev_score is not none and d.prev_score != d.score %}<span class="{{ 'delta-up' if d.score > d.prev_score else 'delta-down' }}">{{ '+' if d.score > d.prev_score }}{{ d.score - d.prev_score }}</span>{% else %}—{% endif %}</td>
+              <td class="num">{{ d.critical }}</td><td class="num">{{ d.high }}</td><td class="num">{{ d.medium }}</td><td class="num">{{ d.low }}</td>
+              <td>{{ d.last_audit_at|when }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty">
+        <strong>{{ 'No device matches that search' if q else 'No devices yet' }}</strong>
+        {% if not q %}
+        <p style="margin-bottom:20px">Devices appear here after their first audit. Upload configurations, or connect a source of backups to audit them on a schedule.</p>
+        <p><a class="btn btn-primary" href="{{ url_for('index') }}#audit">Start an audit {{ arrow() }}</a></p>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

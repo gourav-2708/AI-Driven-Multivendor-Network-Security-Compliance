@@ -67,6 +67,19 @@ static void category_summary(const ReportSession *s, const AuditResult *r)
     }
 }
 
+/* "CIS 4.6, 12.6 | PCI 2.2.7 | ..." - frameworks with no mapping are left out. */
+static void controls_line(FILE *fp, const Rule *rule)
+{
+    bool any = false;
+    for (int f = 0; f < FW_COUNT; f++) {
+        if (!rule->controls[f] || rule->controls[f][0] == '\0') continue;
+        fprintf(fp, "%s%s %s", any ? " | " : "  Controls    : ",
+                framework_label((Framework)f), rule->controls[f]);
+        any = true;
+    }
+    if (any) fputc('\n', fp);
+}
+
 static void findings(const ReportSession *s, const AuditResult *r)
 {
     FILE *fp = s->opts.out;
@@ -86,6 +99,7 @@ static void findings(const ReportSession *s, const AuditResult *r)
                 clr(s, C_RESET), severity_label(f->severity));
         fprintf(fp, "  Section     : %s\n", f->section);
         fprintf(fp, "  Remediation : %s\n", f->remediation);
+        controls_line(fp, f->rule);
     }
     if (shown == 0)
         fprintf(fp, "  (all findings are below the minimum severity)\n");

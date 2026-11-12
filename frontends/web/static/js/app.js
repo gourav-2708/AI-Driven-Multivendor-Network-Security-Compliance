@@ -2,7 +2,7 @@
 'use strict';
 
 (function () {
-  const ALLOWED = ['.cfg', '.conf', '.txt', '.log'];
+  const ALLOWED = ['.cfg', '.conf', '.txt', '.log', '.xml'];
   const form  = document.getElementById('audit-form');
   const drop  = document.getElementById('drop');
   const input = document.getElementById('file-input');
@@ -49,7 +49,7 @@
       if (!ALLOWED.includes(ext)) { skipped++; return; }
       if (!files.some(function (x) { return x.name === f.name && x.size === f.size; })) files.push(f);
     });
-    showError(skipped ? skipped + ' file(s) skipped: only .cfg, .conf, .txt and .log are accepted.' : '');
+    showError(skipped ? skipped + ' file(s) skipped: only .cfg, .conf, .txt, .log and .xml are accepted.' : '');
     render();
   }
 
@@ -92,7 +92,7 @@
     busy.hidden = false;
     run.disabled = true;
     try {
-      const resp = await fetch('/api/audit', { method: 'POST', body: data });
+      const resp = await fetch('/api/audit', { method: 'POST', body: data, headers: { 'X-CSRF-Token': window.csrfToken() } });
       let body;
       try { body = await resp.json(); }
       catch (_) { throw new Error('The server returned an error (HTTP ' + resp.status + ').'); }

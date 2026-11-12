@@ -174,7 +174,8 @@ class NetAuditApp(tk.Tk):
                  fg=TEXT, bg=SURFACE).pack(anchor="w", pady=(6, 0))
         self.vendor_var = tk.StringVar(value="auto")
         vendor_cb = ttk.Combobox(frame, textvariable=self.vendor_var,
-                                 values=["auto", "cisco", "juniper", "fortinet"],
+                                 values=["auto", "cisco", "juniper", "fortinet", "paloalto",
+                                         "arista", "nxos", "asa"],
                                  state="readonly", font=self.f_body)
         vendor_cb.pack(fill="x", pady=(2, 8))
 

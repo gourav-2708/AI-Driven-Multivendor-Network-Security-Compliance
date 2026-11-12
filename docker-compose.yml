@@ -1,0 +1,32 @@
+# net-audit, self-hosted. Start with:  docker compose up -d
+# Then open http://localhost:8080 and create the first account.
+services:
+  net-audit:
+    build: .
+    image: net-audit:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - net-audit-data:/data              # database, session key
+      # Optional: a folder of config backups (RANCID, a backup share) to audit
+      # on a schedule as a "Folder on this server" source. Read-only.
+      # - /srv/network-backups:/backups:ro
+    environment:
+      # Public address of the dashboard, used in links sent by email.
+      # NET_AUDIT_BASE_URL: "https://net-audit.example.com"
+      # Set to 1 when the dashboard is served over HTTPS (recommended).
+      NET_AUDIT_COOKIE_SECURE: "0"
+      # "closed": after the first account, new users must be invited.
+      NET_AUDIT_SIGNUP: "closed"
+      # Air-gapped networks: do not ask browsers to load web fonts from the internet.
+      NET_AUDIT_OFFLINE: "0"
+      # Optional email for invitations, password resets, alerts and reports.
+      # SMTP_HOST: "smtp.example.com"
+      # SMTP_PORT: "587"
+      # SMTP_USER: "net-audit@example.com"
+      # SMTP_PASSWORD: "change-me"
+      # SMTP_FROM: "net-audit@example.com"
+
+volumes:
+  net-audit-data:

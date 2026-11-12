@@ -23,6 +23,7 @@
 #define NA_MAX_ADDR            48   /* IPv4/IPv6 address or hostname      */
 #define NA_MAX_PROTO           32
 #define NA_MAX_SECTION        128   /* "affected section" text of finding */
+#define NA_MAX_CONTROL          24   /* one framework control id, "AC-17(2)" */
 
 /* Collection capacities */
 #define NA_MAX_INTERFACES      64

@@ -6,6 +6,7 @@
 #                     (ASan + UBSan where the toolchain supports them)
 #   make test         build and run the unit + regression suite
 #   make check        test + run the CLI over every fixture
+#   make web-test     end-to-end tests of the web dashboard (needs Python)
 #   make valgrind     run the test suite under valgrind (Linux)
 #   make examples     regenerate the sample reports in examples/
 #   make docs         Doxygen HTML into build/docs (needs doxygen)
@@ -93,7 +94,9 @@ BIN      := $(BUILD)/net-audit$(EXE)
 TEST_BIN := $(BUILD)/net-audit-tests$(EXE)
 FIXTURES := tests/fixtures
 
-.PHONY: all release debug test check valgrind examples docs install clean help
+PYTHON ?= python
+
+.PHONY: all release debug test check web-test valgrind examples docs install clean help
 .DEFAULT_GOAL := all
 
 all: $(BIN)
@@ -124,6 +127,9 @@ check: test $(BIN)
 	$(call native,$(BIN)) --quiet --exit-zero --no-color    --dir $(FIXTURES) --output $(BUILD)/check.txt
 	@echo CLI smoke run OK
 
+web-test: $(BIN)
+	$(PYTHON) -m unittest discover -s frontends/web/tests
+
 valgrind: $(TEST_BIN) $(BIN)
 	valgrind --error-exitcode=99 --leak-check=full --errors-for-leak-kinds=definite,indirect \
 	    $(TEST_BIN) $(FIXTURES)
@@ -152,6 +158,6 @@ clean:
 	$(call RMDIR,build)
 
 help:
-	@echo Targets: all release debug test check valgrind examples docs install clean
+	@echo Targets: all release debug test check web-test valgrind examples docs install clean
 
 -include $(DEPS)

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% from "_macros.html" import rule_line with context %}
+{% block title %}Compliance{% endblock %}
+
+{% block subnav %}
+{% for s in summary %}
+<a href="{{ url_for('compliance_page', fw=s.key) }}#controls" class="{{ 'active' if fw and s.key == fw.key }}">{{ s.title }}</a>
+{% endfor %}
+{% endblock %}
+{% block subnav_cta %}
+<a class="btn btn-primary btn-nav" href="{{ url_for('report_evidence') }}">Evidence pack</a>
+{% endblock %}
+
+{% block content %}
+<section class="page-top compact stripes-tr">
+  <div class="wrap">
+    {{ rule_line() }}
+    <p class="eyebrow">Compliance frameworks</p>
+    <h1>Controls, <span style="color:var(--orange)">not rule numbers.</span></h1>
+    <div class="meta-row">
+      <span>{{ devices }} device{{ '' if devices == 1 else 's' }} in scope</span>
+      <span>{{ rules|length }} rules mapped to {{ summary|length }} frameworks</span>
+      <div class="dl">
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('report_executive') }}" target="_blank" rel="noopener">Executive report (PDF)</a>
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('report_evidence') }}">Evidence pack, all frameworks (ZIP)</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec-app">
+  <div class="wrap stack">
+    <div class="tiles">
+      {% for s in summary %}
+      <a class="tile-s {{ 'current' if fw and s.key == fw.key }} {{ '' if s.score is none else ('ok' if s.score >= 80 else ('warn' if s.score >= 50 else 'bad')) }}"
+         href="{{ url_for('compliance_page', fw=s.key) }}#controls">
+        <b>{% if s.score is none %}—{% else %}{{ s.score }}<small> %</small>{% endif %}</b>
+        <span>{{ s.title }}</span>
+        <small class="muted">{{ s.counts.pass }} passing · {{ s.counts.fail }} failing · {{ s.counts.not_covered }} with no rule yet</small>
+      </a>
+      {% endfor %}
+    </div>
+    <p class="help">The percentage is the share of controls with no open finding, out of the controls net-audit can check.
+      A control with no rule yet is outside that share and needs other evidence. The mapping comes from the engine
+      (<code>net-audit --list-rules --format json</code>); review it against your own copy of each framework before relying on it in an audit.</p>
+
+    {% if fw %}
+    <div id="controls">
+      <h2>{{ fw.title }} <small>{{ fw.covered }} of {{ fw.total }} listed controls have a rule</small></h2>
+      <div class="filters">
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('report_evidence', fw=fw.key) }}">Evidence pack for {{ fw.label }} (ZIP)</a>
+        {% for key in ['fail', 'accepted', 'pass', 'not_assessed', 'not_covered'] if fw.counts[key] %}
+        <span class="badge c-{{ key }}">{{ control_label[key] }} · {{ fw.counts[key] }}</span>
+        {% endfor %}
+      </div>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Checked by</th><th>Evidence</th></tr></thead>
+          <tbody>
+            {% for c in fw.controls if c.status == 'fail' %}{{ row(c) }}{% endfor %}
+            {% for c in fw.controls if c.status == 'accepted' %}{{ row(c) }}{% endfor %}
+            {% for c in fw.controls if c.status == 'pass' %}{{ row(c) }}{% endfor %}
+            {% for c in fw.controls if c.status == 'not_assessed' %}{{ row(c) }}{% endfor %}
+            {% for c in fw.controls if c.status == 'not_covered' %}{{ row(c) }}{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+
+{% macro row(c) %}
+<tr>
+  <td class="mono">{{ c.id }}</td>
+  <td>{{ c.title }}</td>
+  <td><span class="badge c-{{ c.status }}">{{ control_label[c.status] }}</span></td>
+  <td class="mono">{% for r in c.rules %}<a class="link-u" href="{{ url_for('findings_page', q=r) }}">{{ r }}</a>{{ ' ' }}{% else %}—{% endfor %}</td>
+  <td>
+    {% if c.status == 'fail' %}
+      {{ c.devices|length }} device{{ '' if c.devices|length == 1 else 's' }}: {{ c.devices[:5]|join(', ') }}{% if c.devices|length > 5 %} …{% endif %}
+      <small>{{ c.findings|length }} finding{{ '' if c.findings|length == 1 else 's' }}, first seen {{ (c.findings|map(attribute='first_seen_at')|min)|day }}</small>
+    {% elif c.status == 'accepted' %}
+      {{ c.findings|length }} finding{{ '' if c.findings|length == 1 else 's' }} with accepted risk
+    {% elif c.status == 'pass' %}
+      No open finding on {{ devices }} device{{ '' if devices == 1 else 's' }}
+    {% elif c.status == 'not_assessed' %}
+      No device audited yet
+    {% else %}
+      Not checked by net-audit
+    {% endif %}
+  </td>
+</tr>
+{% endmacro %}

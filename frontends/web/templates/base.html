@@ -7,10 +7,14 @@
   <meta name="theme-color" content="#0d0d0d">
   <title>{% block title %}Audit{% endblock %} · net-audit</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23fa582d'/%3E%3Crect x='7' y='9' width='18' height='3' rx='1.5' fill='%23141414'/%3E%3Crect x='7' y='15' width='13' height='3' rx='1.5' fill='%23141414'/%3E%3Crect x='7' y='21' width='8' height='3' rx='1.5' fill='%23141414'/%3E%3C/svg%3E">
+  {% if not offline %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+  {% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  {% if user %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endif %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {# Shared gradients for the ring and bar charts. #}
@@ -29,11 +33,29 @@
       <a class="brand" href="{{ url_for('index') }}" aria-label="net-audit home">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>net-audit
       </a>
+      {% if user %}
       <nav class="top-links" aria-label="Site">
-        <a href="{{ url_for('index') }}#audit">Audit</a>
-        <a href="{{ url_for('history_page') }}" class="{{ 'active' if request.endpoint == 'history_page' }}">History</a>
-        <a href="{{ url_for('api_health') }}">Engine health</a>
+        {% set ep = request.endpoint %}
+        <a href="{{ url_for('index') }}#audit" class="{{ 'active' if ep in ('index', 'results_page') }}">Audit</a>
+        <a href="{{ url_for('devices_page') }}" class="{{ 'active' if ep in ('devices_page', 'device_page') }}">Devices</a>
+        <a href="{{ url_for('findings_page') }}" class="{{ 'active' if ep == 'findings_page' }}">Findings</a>
+        <a href="{{ url_for('compliance_page') }}" class="{{ 'active' if ep == 'compliance_page' }}">Compliance</a>
+        <a href="{{ url_for('alerts_page') }}" class="{{ 'active' if ep == 'alerts_page' }}">Alerts{% if open_alerts %}<b class="nav-badge">{{ open_alerts }}</b>{% endif %}</a>
+        <a href="{{ url_for('sources_page') }}" class="{{ 'active' if ep == 'sources_page' }}">Sources</a>
+        <a href="{{ url_for('history_page') }}" class="{{ 'active' if ep == 'history_page' }}">History</a>
+        <a href="{{ url_for('settings_page') }}" class="{{ 'active' if ep == 'settings_page' }}">Settings</a>
       </nav>
+      <form class="who" method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <span class="who-id" title="{{ user.email }} · {{ role }}"><b>{{ org.name }}</b>{{ user.email }}</span>
+        <button class="btn btn-ghost btn-sm" type="submit">Sign out</button>
+      </form>
+      {% else %}
+      <nav class="top-links" aria-label="Site">
+        <a href="{{ url_for('login_page') }}" class="{{ 'active' if request.endpoint == 'login_page' }}">Sign in</a>
+        <a href="{{ url_for('signup_page') }}" class="{{ 'active' if request.endpoint == 'signup_page' }}">Create account</a>
+      </nav>
+      {% endif %}
       <span class="status-pill {{ '' if binary_exists else 'off' }}" role="status"
             title="{{ 'Auditor engine ready' if binary_exists else 'Auditor engine not built' }}">
         <i aria-hidden="true"></i>{{ 'Engine ready' if binary_exists else 'Engine offline' }}
@@ -45,6 +67,7 @@
 
   {# The section nav sticks only while the page body is in view, not over the footer. #}
   <div class="page-body">
+  {% block subnav_bar %}
   <nav class="subnav" id="subnav" aria-label="Sections">
     <div class="wrap">
       <div class="subnav-links">
@@ -55,6 +78,17 @@
       {% endblock %}
     </div>
   </nav>
+  {% endblock %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="flashes wrap" role="status">
+    {% for category, message in messages %}
+    <p class="flash {{ category }}">{{ message }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
 
   <main id="main">
     {% block content %}{% endblock %}
@@ -67,6 +101,9 @@
         <div>
           <h2>Audit</h2>
           <a href="{{ url_for('index') }}#audit">Start an audit</a>
+          <a href="{{ url_for('devices_page') }}">Device inventory</a>
+          <a href="{{ url_for('findings_page') }}">Findings</a>
+          <a href="{{ url_for('compliance_page') }}">Compliance frameworks</a>
           <a href="{{ url_for('history_page') }}">Audit history</a>
           <a href="{{ url_for('api_health') }}">Engine health</a>
           <h2 class="gap">Reports</h2>
@@ -77,9 +114,9 @@
         </div>
         <div>
           <h2>Vendors</h2>
-          <a href="{{ url_for('index') }}#vendor-cisco">Cisco IOS</a>
-          <a href="{{ url_for('index') }}#vendor-juniper">Juniper JunOS</a>
-          <a href="{{ url_for('index') }}#vendor-fortinet">Fortinet FortiOS</a>
+          {% for key, name in engine_vendors %}
+          <span>{{ name }}</span>
+          {% endfor %}
           <a href="{{ url_for('index') }}#vendor-fleet">Fleet auditing</a>
         </div>
         <div class="foot-rules" id="catalogue">
@@ -112,7 +149,7 @@
             <a href="{{ url_for('history_page') }}">History</a>
             <a href="{{ url_for('api_health') }}">Health</a>
           </p>
-          <p class="foot-copy">net-audit 2.0 · deterministic multi-vendor compliance auditing</p>
+          <p class="foot-copy">net-audit {{ engine_version }} · deterministic multi-vendor compliance auditing</p>
         </div>
         <div class="foot-right">
           <a class="foot-icon" href="https://github.com/gourav-2708/AI-Driven-Multivendor-Network-Security-Compliance" rel="noopener" aria-label="Source code on GitHub">
@@ -120,7 +157,7 @@
           </a>
           <span class="foot-pill">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
-            v2.0.0
+            v{{ engine_version }}
           </span>
         </div>
       </div>
@@ -128,6 +165,7 @@
   </footer>
 
   <script src="{{ url_for('static', filename='js/ui.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/manage.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_macros.html" import rule_line, csrf with context %}
+{% block title %}Alerts{% endblock %}
+
+{% block subnav %}
+<a href="#alerts" class="active">Drift alerts</a>
+<a href="{{ url_for('devices_page') }}">Devices</a>
+<a href="{{ url_for('settings_page') }}#integrations">Where alerts are sent</a>
+{% endblock %}
+
+{% block content %}
+<section class="page-top compact stripes-tr">
+  <div class="wrap">
+    {{ rule_line() }}
+    <p class="eyebrow">Drift alerts</p>
+    <h1>When a device <span style="color:var(--orange)">gets worse.</span></h1>
+    <div class="meta-row">
+      <span>Raised when a device scores lower than at its previous audit, or a critical finding is new.</span>
+      {% if open_alerts and can('auditor') %}
+      <div class="dl">
+        <form method="post" action="{{ url_for('alerts_ack') }}">{{ csrf() }}<button class="btn btn-ghost btn-sm" type="submit">Acknowledge all {{ open_alerts }}</button></form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="sec-app" id="alerts">
+  <div class="wrap">
+    {% if alerts %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>When</th><th>Device</th><th>What changed</th><th>Audit</th><th>State</th></tr></thead>
+        <tbody>
+          {% for a in alerts %}
+          <tr>
+            <td>{{ a.at|when }}</td>
+            <td><a class="strong" href="{{ url_for('device_page', dev_id=a.device_id) }}">{{ a.hostname }}</a></td>
+            <td>{{ a.message }}<small>{{ 'Score drop' if a.kind == 'score_drop' else 'New critical finding' }}</small></td>
+            <td><a class="link-u" href="{{ url_for('results_page', aid=a.audit_id) }}">{{ a.audit_id }}</a></td>
+            <td>
+              {% if a.acknowledged %}
+              <span class="badge off">Acknowledged</span>{% if a.acknowledged_by %}<small>{{ a.acknowledged_by }}</small>{% endif %}
+              {% elif can('auditor') %}
+              <form class="inline" method="post" action="{{ url_for('alerts_ack') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ a._id }}"><button class="btn btn-ghost btn-sm" type="submit">Acknowledge</button></form>
+              {% else %}
+              <span class="badge error">Open</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty"><strong>No alerts</strong>Nothing has got worse between two audits of the same device.</div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

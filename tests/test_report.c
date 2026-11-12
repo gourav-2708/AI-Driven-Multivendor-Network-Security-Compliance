@@ -141,6 +141,30 @@ static void json_device_is_valid(void)
     CHECK(strstr(out, "\"report_type\": \"device\"") != NULL);
     CHECK(strstr(out, "\"hostname\": \"core-router-01\"") != NULL);
     CHECK_INT(occurrences(out, "\"rule_id\""), s_r.finding_count);
+    /* Every finding carries its framework mapping. */
+    CHECK_INT(occurrences(out, "\"frameworks\": {"), s_r.finding_count);
+    CHECK(strstr(out, "\"pci_dss_4\": [\"2.2.7\", \"8.3.2\"]") != NULL);     /* AUTH-003 */
+    CHECK(strstr(out, "\"cis_v8\": []") != NULL);                             /* AUTH-001 */
+}
+
+static void rule_catalogue_json_is_valid(void)
+{
+    FILE *fp = fopen(SCRATCH, "wb");
+    CHECK(fp != NULL);
+    if (!fp) return;
+    report_rule_catalogue_json(fp, "9.9.9");
+    fclose(fp);
+    fp = fopen(SCRATCH, "rb");
+    size_t n = fp ? fread(s_out, 1, sizeof(s_out) - 1, fp) : 0;
+    if (fp) fclose(fp);
+    s_out[n] = '\0';
+    remove(SCRATCH);
+
+    CHECK(json_valid(s_out));
+    CHECK(strstr(s_out, "\"version\": \"9.9.9\"") != NULL);
+    CHECK_INT(occurrences(s_out, "\"id\": \""), (int)rules_count());
+    CHECK_INT(occurrences(s_out, "\"key\": \""), FW_COUNT);
+    CHECK(strstr(s_out, "\"nist_800_53_r5\": [\"AC-17(2)\", \"CM-7\", \"SC-8\"]") != NULL);
 }
 
 static void json_fleet_is_valid(void)
@@ -218,6 +242,7 @@ static void text_device_and_fleet(void)
     CHECK(strstr(out, "NET-AUDIT COMPLIANCE REPORT") != NULL);
     CHECK(strstr(out, "Authentication (AUTH)") != NULL);
     CHECK(strstr(out, "\033[") == NULL);          /* colour off */
+    CHECK(strstr(out, "  Controls    : CIS 3.10, 4.6, 12.6 | PCI 2.2.7, 8.3.2 | ") != NULL);
 
     out = render(REPORT_TEXT, SEV_HIGH, true, k_fleet, 4);
     CHECK_INT(occurrences(out, "NET-AUDIT COMPLIANCE REPORT"), 4);
@@ -259,6 +284,7 @@ static void format_names(void)
 void suite_report(void)
 {
     TEST(json_device_is_valid);
+    TEST(rule_catalogue_json_is_valid);
     TEST(json_fleet_is_valid);
     TEST(json_filters_by_severity);
     TEST(csv_quoting_and_rows);

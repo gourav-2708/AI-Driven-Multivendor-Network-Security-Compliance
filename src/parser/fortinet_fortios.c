@@ -44,6 +44,7 @@ typedef struct {
     FFrame       stack[FOS_MAX_DEPTH];
     int          depth;
     int          line;
+    int          admins, admins_with_trusthost;   /* system admin entries */
 } FState;
 
 #define W(i)      ((i) < n ? w[i] : "")
@@ -136,10 +137,14 @@ static void set_interface(FState *st, FFrame *e, char *w[], int n)
     }
 }
 
-static void set_admin(FState *st, char *w[], int n)
+static void set_admin(FState *st, FFrame *e, char *w[], int n)
 {
     AuthConfig *a = &st->m->auth;
     a->local_users = true;
+    /* set trusthost1 ADDR MASK / set ip6-trusthost1 PREFIX: anything but "all" */
+    if ((str_starts_with_ci(W(1), "trusthost") && !IS(2, "0.0.0.0")) ||
+        (str_starts_with_ci(W(1), "ip6-trusthost") && !IS(2, "::/0")))
+        e->restricted = true;
     if (IS(1, "password")) {
         if (IS(2, "ENC")) {
             a->enable_secret_set = true;
@@ -177,10 +182,20 @@ static void handle_set(FState *st, char *w[], int n)
         if (IS(1, "hostname"))
             safe_strcpy(m->hostname, sizeof(m->hostname), W(2));
         if (IS(1, "admin-telnet") && IS(2, "enable")) m->mgmt.telnet_enabled = true;
+        if (IS(1, "admintimeout")) {
+            int minutes;
+            if (str_to_int(W(2), &minutes) && minutes > 0)
+                m->mgmt.idle_timeout_min = minutes;
+        }
+        if (IS(1, "pre-login-banner") && IS(2, "enable")) m->mgmt.login_banner = true;
+        return;
+    }
+    if (str_eq_ci(sec, "system password-policy")) {
+        if (IS(1, "status") && IS(2, "enable")) m->auth.password_policy = true;
         return;
     }
     if (str_eq_ci(sec, "system interface") && entry) { set_interface(st, entry, w, n); return; }
-    if (str_eq_ci(sec, "system admin") && entry)     { set_admin(st, w, n);            return; }
+    if (str_eq_ci(sec, "system admin") && entry)     { set_admin(st, entry, w, n);     return; }
     if (is_policy_section(sec) && entry)             { set_policy(entry, w, n);        return; }
 
     if (str_eq_ci(sec, "system snmp sysinfo")) {
@@ -261,6 +276,11 @@ static void push(FState *st, FrameKind kind, const char *name)
 static void commit_entry(FState *st, const FFrame *e, const char *sec)
 {
     DeviceModel *m = st->m;
+    if (str_eq_ci(sec, "system admin")) {
+        st->admins++;
+        if (e->restricted) st->admins_with_trusthost++;
+        return;
+    }
     if (e->disabled) return;
 
     if (is_policy_section(sec)) {
@@ -365,6 +385,11 @@ static AuditStatus fos_parse(const char *path, DeviceModel *m)
     memset(&st, 0, sizeof(st));
     st.m = m;
 
+    /* FortiOS defaults: three failed logins lock the source out, the admin
+     * idle timeout is five minutes, and every log entry is timestamped. */
+    m->auth.login_lockout = true;
+    m->logging.timestamps = true;
+
     char *words[NA_MAX_TOKENS];
     char *line;
     while ((line = line_reader_next(&r)) != NULL) {
@@ -375,6 +400,9 @@ static AuditStatus fos_parse(const char *path, DeviceModel *m)
         handle_line(&st, words, n);
     }
     while (st.depth > 0) pop(&st);      /* commit anything left open */
+
+    /* Management is restricted when every administrator has a trusted host. */
+    m->mgmt.access_restricted = st.admins > 0 && st.admins_with_trusthost == st.admins;
 
     rc = line_reader_failed(&r) ? AUDIT_ERR_IO : AUDIT_OK;
     line_reader_close(&r);

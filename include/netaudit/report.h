@@ -63,6 +63,9 @@ AuditStatus report_end(ReportSession *s);
 /** Findings in the session that passed the severity filter. */
 int report_visible_findings(const ReportSession *s);
 
+/** The rule catalogue with its framework mapping, as one JSON document. */
+void report_rule_catalogue_json(FILE *fp, const char *version);
+
 bool        report_format_parse(const char *name, ReportFormat *out);
 const char *report_format_name(ReportFormat f);
 
