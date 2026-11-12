@@ -74,6 +74,14 @@ bool rule_next_control(const Rule *r, Framework f, const char **cursor,
 
 /* -- Findings ---------------------------------------------------------------- */
 
+/* The format attribute is required, not decoration: Clang's
+ * -Wformat-nonliteral (part of -Wformat=2) rejects passing a format string
+ * on to a v*printf-style function unless the caller is itself declared as
+ * one. GCC does not check va_list callers, so only Clang builds notice. */
+static void add_finding(FindingSink *sink, Severity sev, const char *desc,
+                        const char *rem, int line, const char *fmt, va_list ap)
+     NA_PRINTF(6, 0);
+
 static void add_finding(FindingSink *sink, Severity sev, const char *desc,
                         const char *rem, int line, const char *fmt, va_list ap)
 {

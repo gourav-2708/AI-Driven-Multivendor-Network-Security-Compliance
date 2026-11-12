@@ -31,6 +31,28 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* A libc may also provide any of these as a function-like macro: macOS does
+ * for strcpy, strcat, sprintf and vsprintf whenever it fortifies (any
+ * optimised build). Poisoning a name that is currently a macro is itself a
+ * warning ("poisoning existing macro"), so an error under -Werror. C11
+ * 7.1.4 lets a program #undef such a macro; nothing here calls them. */
+#undef strcpy
+#undef strcat
+#undef sprintf
+#undef vsprintf
+#undef gets
+#undef scanf
+#undef sscanf
+#undef fscanf
+#undef atoi
+#undef atol
+#undef atof
+#undef strtok
+#undef malloc
+#undef calloc
+#undef realloc
+#undef free
+
 #if defined(__GNUC__) && !defined(NETAUDIT_NO_POISON)
 #  pragma GCC poison strcpy strcat sprintf vsprintf gets
 #  pragma GCC poison scanf sscanf fscanf
