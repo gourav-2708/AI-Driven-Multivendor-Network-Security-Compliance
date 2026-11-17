@@ -1,0 +1,151 @@
+<?xml version="1.0"?>
+<!-- ============================================================
+     TEST FILE 11: Palo Alto - SECURE (XML export)
+     Device: pa-edge-secure
+     Scenario: Hardened PAN-OS perimeter firewall
+     ============================================================ -->
+<config version="10.2.4" urldb="paloaltonetworks">
+  <mgt-config>
+    <users>
+      <entry name="fwadmin">
+        <phash>$5$kqzvbnmw$Hq1mW0b2cJ8yYvQbqk0yG9t3mJxX5n4cO1sT7uV2pA3</phash>
+        <permissions>
+          <role-based>
+            <superuser>yes</superuser>
+          </role-based>
+        </permissions>
+        <authentication-profile>TACACS-ADMINS</authentication-profile>
+      </entry>
+    </users>
+    <password-complexity>
+      <enabled>yes</enabled>
+      <minimum-length>14</minimum-length>
+      <minimum-uppercase-letters>1</minimum-uppercase-letters>
+    </password-complexity>
+  </mgt-config>
+  <shared>
+    <log-settings>
+      <syslog>
+        <entry name="SIEM">
+          <server>
+            <entry name="siem-1">
+              <server>10.20.1.50</server>
+              <transport>SSL</transport>
+              <port>6514</port>
+            </entry>
+          </server>
+        </entry>
+      </syslog>
+    </log-settings>
+  </shared>
+  <devices>
+    <entry name="localhost.localdomain">
+      <deviceconfig>
+        <system>
+          <hostname>pa-edge-secure</hostname>
+          <login-banner>Authorized access only. Activity is logged &amp; monitored.</login-banner>
+          <permitted-ip>
+            <entry name="10.20.0.0/24"/>
+          </permitted-ip>
+          <service>
+            <disable-telnet>yes</disable-telnet>
+            <disable-http>yes</disable-http>
+          </service>
+          <ntp-servers>
+            <primary-ntp-server>
+              <ntp-server-address>10.20.1.10</ntp-server-address>
+              <authentication-type>
+                <symmetric-key>
+                  <key-id>1</key-id>
+                  <algorithm><sha1><authentication-key>-AQ==placeholder</authentication-key></sha1></algorithm>
+                </symmetric-key>
+              </authentication-type>
+            </primary-ntp-server>
+            <secondary-ntp-server>
+              <ntp-server-address>10.20.1.11</ntp-server-address>
+              <authentication-type>
+                <symmetric-key>
+                  <key-id>1</key-id>
+                </symmetric-key>
+              </authentication-type>
+            </secondary-ntp-server>
+          </ntp-servers>
+          <snmp-setting>
+            <access-setting>
+              <version>
+                <v3>
+                  <users>
+                    <entry name="nms">
+                      <view>all</view>
+                      <authpwd>-AQ==placeholder</authpwd>
+                      <privpwd>-AQ==placeholder</privpwd>
+                    </entry>
+                  </users>
+                </v3>
+              </version>
+            </access-setting>
+          </snmp-setting>
+        </system>
+        <setting>
+          <management>
+            <idle-timeout>10</idle-timeout>
+            <admin-lockout>
+              <failed-attempts>5</failed-attempts>
+              <lockout-time>30</lockout-time>
+            </admin-lockout>
+          </management>
+        </setting>
+      </deviceconfig>
+      <network>
+        <interface>
+          <ethernet>
+            <entry name="ethernet1/1">
+              <layer3>
+                <ip>
+                  <entry name="203.0.113.10/30"/>
+                </ip>
+              </layer3>
+              <comment>Internet uplink</comment>
+            </entry>
+            <entry name="ethernet1/2">
+              <layer3>
+                <ip>
+                  <entry name="10.20.10.1/24"/>
+                </ip>
+              </layer3>
+              <comment>Server zone</comment>
+            </entry>
+          </ethernet>
+        </interface>
+      </network>
+      <vsys>
+        <entry name="vsys1">
+          <rulebase>
+            <security>
+              <rules>
+                <entry name="web-out">
+                  <from><member>trust</member></from>
+                  <to><member>untrust</member></to>
+                  <source><member>10.20.10.0/24</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>ssl</member><member>web-browsing</member></application>
+                  <service><member>application-default</member></service>
+                  <action>allow</action>
+                </entry>
+                <entry name="deny-all">
+                  <from><member>any</member></from>
+                  <to><member>any</member></to>
+                  <source><member>any</member></source>
+                  <destination><member>any</member></destination>
+                  <application><member>any</member></application>
+                  <service><member>any</member></service>
+                  <action>deny</action>
+                </entry>
+              </rules>
+            </security>
+          </rulebase>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

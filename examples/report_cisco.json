@@ -4,11 +4,11 @@
   "vendor": "cisco",
   "version": "15.7",
   "source": "tests/fixtures/cisco_sample.cfg",
-  "score": 2,
+  "score": 0,
   "critical": 5,
-  "high": 7,
-  "medium": 4,
-  "low": 2,
+  "high": 8,
+  "medium": 9,
+  "low": 4,
   "findings": [
     {
       "rule_id": "AUTH-001",
@@ -16,7 +16,8 @@
       "section": "auth / enable password",
       "line": -1,
       "description": "Privileged password stored in plaintext or reversible form, with no hashed secret",
-      "remediation": "Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration."
+      "remediation": "Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration.",
+      "frameworks": { "cis_v8": [], "pci_dss_4": ["8.3.2"], "iso_27001_2022": ["A.5.17", "A.8.5"], "nist_800_53_r5": ["IA-5(1)"] }
     },
     {
       "rule_id": "AUTH-002",
@@ -24,7 +25,8 @@
       "section": "auth / aaa",
       "line": -1,
       "description": "AAA (Authentication, Authorization, Accounting) not configured",
-      "remediation": "Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS)."
+      "remediation": "Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).",
+      "frameworks": { "cis_v8": ["6.7", "12.5"], "pci_dss_4": ["8.2.1"], "iso_27001_2022": ["A.5.15", "A.5.16", "A.8.5"], "nist_800_53_r5": ["AC-2", "IA-2"] }
     },
     {
       "rule_id": "AUTH-003",
@@ -32,7 +34,8 @@
       "section": "management access / telnet",
       "line": -1,
       "description": "Telnet permitted for device management (cleartext credentials)",
-      "remediation": "Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS)."
+      "remediation": "Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).",
+      "frameworks": { "cis_v8": ["3.10", "4.6", "12.6"], "pci_dss_4": ["2.2.7", "8.3.2"], "iso_27001_2022": ["A.8.5", "A.8.20", "A.8.24"], "nist_800_53_r5": ["AC-17(2)", "CM-7", "SC-8"] }
     },
     {
       "rule_id": "AUTH-004",
@@ -40,7 +43,35 @@
       "section": "management access / ssh",
       "line": -1,
       "description": "SSH not enabled; no encrypted management access configured",
-      "remediation": "Enable SSHv2: 'ip ssh version 2' and 'crypto key generate rsa modulus 4096' (IOS), 'system services ssh' (JunOS), 'ssh' in allowaccess (FortiOS). Then restrict management to SSH."
+      "remediation": "Enable SSHv2: 'ip ssh version 2' and 'crypto key generate rsa modulus 4096' (IOS), 'system services ssh' (JunOS), 'ssh' in allowaccess (FortiOS). Then restrict management to SSH.",
+      "frameworks": { "cis_v8": ["4.6", "12.6"], "pci_dss_4": ["2.2.7"], "iso_27001_2022": ["A.8.20", "A.8.24"], "nist_800_53_r5": ["AC-17(2)", "SC-8", "SC-13"] }
+    },
+    {
+      "rule_id": "AUTH-006",
+      "severity": "LOW",
+      "section": "management access / login banner",
+      "line": -1,
+      "description": "No login banner warns users before they authenticate",
+      "remediation": "Show a legal notice before login: 'banner login' (IOS, NX-OS, EOS, ASA), 'system login message' (JunOS), 'pre-login-banner' (FortiOS), login-banner (PAN-OS). Do not include device or site details in it.",
+      "frameworks": { "cis_v8": [], "pci_dss_4": [], "iso_27001_2022": [], "nist_800_53_r5": ["AC-8"] }
+    },
+    {
+      "rule_id": "AUTH-007",
+      "severity": "MEDIUM",
+      "section": "management access / permitted sources",
+      "line": -1,
+      "description": "Management logins are accepted from any source address",
+      "remediation": "Limit who can reach the management plane: 'access-class <acl> in' on every VTY line (IOS/NX-OS), an input filter on lo0 (JunOS), 'trusthost' on every admin (FortiOS), 'ip access-group' under 'management ssh' (EOS), specific 'ssh'/'http' source networks (ASA), permitted-ip (PAN-OS).",
+      "frameworks": { "cis_v8": ["12.3"], "pci_dss_4": [], "iso_27001_2022": ["A.8.3", "A.8.20"], "nist_800_53_r5": ["AC-17", "SC-7"] }
+    },
+    {
+      "rule_id": "AUTH-008",
+      "severity": "MEDIUM",
+      "section": "auth / login attempts",
+      "line": -1,
+      "description": "Repeated failed logins are not limited or locked out",
+      "remediation": "Slow down password guessing: 'login block-for' (IOS/NX-OS), 'aaa local authentication attempts max-fail' (IOS/ASA), 'system login retry-options' (JunOS), 'aaa authentication policy lockout' (EOS), admin-lockout failed-attempts (PAN-OS).",
+      "frameworks": { "cis_v8": [], "pci_dss_4": ["8.3.4"], "iso_27001_2022": ["A.8.5"], "nist_800_53_r5": ["AC-7"] }
     },
     {
       "rule_id": "PASSWD-001",
@@ -48,7 +79,17 @@
       "section": "service password-encryption",
       "line": -1,
       "description": "Passwords stored in plaintext: password encryption is not enabled",
-      "remediation": "Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials."
+      "remediation": "Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials.",
+      "frameworks": { "cis_v8": [], "pci_dss_4": ["8.3.2"], "iso_27001_2022": ["A.5.17", "A.8.5"], "nist_800_53_r5": ["IA-5(1)"] }
+    },
+    {
+      "rule_id": "PASSWD-002",
+      "severity": "MEDIUM",
+      "section": "auth / password policy",
+      "line": -1,
+      "description": "No minimum length or complexity is enforced for local passwords",
+      "remediation": "Enforce a minimum length of 12 or more: 'security passwords min-length' (IOS), 'system login password minimum-length' (JunOS), 'config system password-policy' (FortiOS), 'password strength-check' (NX-OS), 'password-policy minimum-length' (ASA), password-complexity (PAN-OS).",
+      "frameworks": { "cis_v8": ["5.2"], "pci_dss_4": ["8.3.6"], "iso_27001_2022": ["A.5.17"], "nist_800_53_r5": ["IA-5(1)"] }
     },
     {
       "rule_id": "ACL-001",
@@ -56,7 +97,8 @@
       "section": "ACL 'INSECURE_ACL' entry 1 (line 68)",
       "line": 68,
       "description": "ACL contains unrestricted 'permit any any' (allows all traffic)",
-      "remediation": "Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit."
+      "remediation": "Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.",
+      "frameworks": { "cis_v8": ["12.2", "13.4"], "pci_dss_4": ["1.2.5", "1.3.1", "1.4.2"], "iso_27001_2022": ["A.8.20", "A.8.22"], "nist_800_53_r5": ["AC-4", "SC-7(5)"] }
     },
     {
       "rule_id": "ACL-002",
@@ -64,7 +106,8 @@
       "section": "interface 'GigabitEthernet0/2'",
       "line": 48,
       "description": "Management interface has no inbound ACL applied",
-      "remediation": "Apply an inbound ACL/filter to every management interface that admits only known management hosts and the required protocols (SSH, SNMP, HTTPS)."
+      "remediation": "Apply an inbound ACL/filter to every management interface that admits only known management hosts and the required protocols (SSH, SNMP, HTTPS).",
+      "frameworks": { "cis_v8": ["12.3"], "pci_dss_4": [], "iso_27001_2022": ["A.8.20", "A.8.22"], "nist_800_53_r5": ["AC-4", "SC-7"] }
     },
     {
       "rule_id": "SNMP-001",
@@ -72,7 +115,8 @@
       "section": "snmp / community 'public' (read-only)",
       "line": 29,
       "description": "SNMPv1/v2c community string is a default or easily guessed value",
-      "remediation": "Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities."
+      "remediation": "Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.",
+      "frameworks": { "cis_v8": ["4.7"], "pci_dss_4": ["2.2.2"], "iso_27001_2022": ["A.5.17", "A.8.9"], "nist_800_53_r5": ["IA-5"] }
     },
     {
       "rule_id": "SNMP-001",
@@ -80,7 +124,8 @@
       "section": "snmp / community 'private' (read-write)",
       "line": 30,
       "description": "SNMPv1/v2c community string is a default or easily guessed value",
-      "remediation": "Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities."
+      "remediation": "Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.",
+      "frameworks": { "cis_v8": ["4.7"], "pci_dss_4": ["2.2.2"], "iso_27001_2022": ["A.5.17", "A.8.9"], "nist_800_53_r5": ["IA-5"] }
     },
     {
       "rule_id": "SNMP-002",
@@ -88,7 +133,8 @@
       "section": "snmp / community 'public'",
       "line": 29,
       "description": "SNMP community is not restricted to known management hosts",
-      "remediation": "Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts')."
+      "remediation": "Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').",
+      "frameworks": { "cis_v8": ["12.3"], "pci_dss_4": ["2.2.6"], "iso_27001_2022": ["A.8.20", "A.8.21"], "nist_800_53_r5": ["AC-3", "SC-7"] }
     },
     {
       "rule_id": "SNMP-002",
@@ -96,7 +142,26 @@
       "section": "snmp / community 'private'",
       "line": 30,
       "description": "SNMP community is not restricted to known management hosts",
-      "remediation": "Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts')."
+      "remediation": "Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').",
+      "frameworks": { "cis_v8": ["12.3"], "pci_dss_4": ["2.2.6"], "iso_27001_2022": ["A.8.20", "A.8.21"], "nist_800_53_r5": ["AC-3", "SC-7"] }
+    },
+    {
+      "rule_id": "SNMP-003",
+      "severity": "HIGH",
+      "section": "snmp / community 'private' (read-write)",
+      "line": 30,
+      "description": "An SNMPv1/v2c community grants read-write access",
+      "remediation": "Remove read-write communities. If SNMP writes are needed, use an SNMPv3 user with authentication and privacy, limited by a view. Anyone who learns a read-write community can change the device.",
+      "frameworks": { "cis_v8": [], "pci_dss_4": ["2.2.6"], "iso_27001_2022": ["A.8.2", "A.8.21"], "nist_800_53_r5": ["AC-6", "CM-7"] }
+    },
+    {
+      "rule_id": "SNMP-004",
+      "severity": "MEDIUM",
+      "section": "snmp / version",
+      "line": -1,
+      "description": "SNMP runs only as v1/v2c, which sends community strings and data unencrypted",
+      "remediation": "Configure SNMPv3 users with SHA authentication and AES privacy (authPriv), move the management station to them, then remove the v1/v2c communities.",
+      "frameworks": { "cis_v8": ["3.10", "12.6"], "pci_dss_4": ["1.2.6", "2.2.5"], "iso_27001_2022": ["A.8.21", "A.8.24"], "nist_800_53_r5": ["CM-7", "SC-8"] }
     },
     {
       "rule_id": "SVC-001",
@@ -104,7 +169,8 @@
       "section": "management access / http",
       "line": -1,
       "description": "Plain-text HTTP management access is enabled",
-      "remediation": "Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate."
+      "remediation": "Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate.",
+      "frameworks": { "cis_v8": ["4.6", "12.6"], "pci_dss_4": ["2.2.7"], "iso_27001_2022": ["A.8.20", "A.8.24"], "nist_800_53_r5": ["AC-17(2)", "SC-8"] }
     },
     {
       "rule_id": "SVC-002",
@@ -112,7 +178,8 @@
       "section": "service / cdp run",
       "line": -1,
       "description": "CDP (Cisco Discovery Protocol) enabled globally",
-      "remediation": "Run 'no cdp run', or at least 'no cdp enable' on every external and untrusted interface. CDP discloses platform, version and addressing."
+      "remediation": "Run 'no cdp run', or at least 'no cdp enable' on every external and untrusted interface. CDP discloses platform, version and addressing.",
+      "frameworks": { "cis_v8": ["4.8"], "pci_dss_4": ["2.2.4"], "iso_27001_2022": ["A.8.9"], "nist_800_53_r5": ["CM-7"] }
     },
     {
       "rule_id": "SVC-003",
@@ -120,7 +187,17 @@
       "section": "service tcp-small-servers / udp-small-servers",
       "line": -1,
       "description": "TCP/UDP small servers enabled (echo, chargen, discard, daytime)",
-      "remediation": "Disable with 'no service tcp-small-servers' and 'no service udp-small-servers'. These services are obsolete and can be abused for amplification attacks."
+      "remediation": "Disable with 'no service tcp-small-servers' and 'no service udp-small-servers'. These services are obsolete and can be abused for amplification attacks.",
+      "frameworks": { "cis_v8": ["4.8"], "pci_dss_4": ["2.2.4"], "iso_27001_2022": ["A.8.9"], "nist_800_53_r5": ["CM-7", "SC-5"] }
+    },
+    {
+      "rule_id": "SVC-004",
+      "severity": "MEDIUM",
+      "section": "service / ip source-route",
+      "line": -1,
+      "description": "IP source routing is enabled (the sender can choose the path)",
+      "remediation": "Disable with 'no ip source-route'. Source-routed packets let an attacker steer traffic around filters and spoof trusted addresses.",
+      "frameworks": { "cis_v8": ["4.8"], "pci_dss_4": ["1.4.3", "2.2.4"], "iso_27001_2022": ["A.8.20"], "nist_800_53_r5": ["CM-7", "SC-7"] }
     },
     {
       "rule_id": "LOG-001",
@@ -128,7 +205,8 @@
       "section": "logging",
       "line": -1,
       "description": "No remote syslog server configured",
-      "remediation": "Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response."
+      "remediation": "Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response.",
+      "frameworks": { "cis_v8": ["8.2", "8.9"], "pci_dss_4": ["10.2.1", "10.3.3"], "iso_27001_2022": ["A.8.15", "A.8.16"], "nist_800_53_r5": ["AU-4(1)", "AU-9(2)"] }
     },
     {
       "rule_id": "LOG-002",
@@ -136,7 +214,17 @@
       "section": "logging buffered",
       "line": -1,
       "description": "Buffered (local) logging not enabled",
-      "remediation": "Enable a local log buffer ('logging buffered 65536 informational'; JunOS 'syslog file'; FortiOS memory/disk logging) as a fallback when the collector is unreachable."
+      "remediation": "Enable a local log buffer ('logging buffered 65536 informational'; JunOS 'syslog file'; FortiOS memory/disk logging) as a fallback when the collector is unreachable.",
+      "frameworks": { "cis_v8": ["8.2", "8.3"], "pci_dss_4": ["10.2.1"], "iso_27001_2022": ["A.8.15"], "nist_800_53_r5": ["AU-4", "AU-12"] }
+    },
+    {
+      "rule_id": "LOG-003",
+      "severity": "LOW",
+      "section": "logging / timestamps",
+      "line": -1,
+      "description": "Log messages do not carry a date and time",
+      "remediation": "Stamp every message: 'service timestamps log datetime msec show-timezone' (IOS), 'logging timestamp' (ASA). Without timestamps, events cannot be ordered or matched across devices.",
+      "frameworks": { "cis_v8": ["8.5"], "pci_dss_4": ["10.2.2"], "iso_27001_2022": ["A.8.15", "A.8.17"], "nist_800_53_r5": ["AU-3", "AU-8"] }
     },
     {
       "rule_id": "NTP-001",
@@ -144,7 +232,8 @@
       "section": "ntp",
       "line": -1,
       "description": "NTP not configured; device clock may be unsynchronised",
-      "remediation": "Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering."
+      "remediation": "Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering.",
+      "frameworks": { "cis_v8": ["8.4"], "pci_dss_4": ["10.6.1", "10.6.2"], "iso_27001_2022": ["A.8.17"], "nist_800_53_r5": ["AU-8", "SC-45(1)"] }
     },
     {
       "rule_id": "INTF-001",
@@ -152,7 +241,8 @@
       "section": "interface 'GigabitEthernet0/3'",
       "line": 59,
       "description": "Interface is active but has no IP address or description assigned",
-      "remediation": "Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable."
+      "remediation": "Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.",
+      "frameworks": { "cis_v8": ["4.8"], "pci_dss_4": ["2.2.4"], "iso_27001_2022": ["A.8.9"], "nist_800_53_r5": ["CM-7"] }
     }
   ]
 }

@@ -30,6 +30,27 @@ jobs:
       - name: Valgrind
         if: matrix.cc == 'gcc'
         run: make valgrind
+      - name: Web dashboard tests
+        if: matrix.cc == 'gcc'
+        run: |
+          python3 -m pip install --quiet -r frontends/web/requirements.txt
+          python3 -m unittest discover -s frontends/web/tests -v
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the self-hosted image
+        run: docker build -t net-audit .
+      - name: Start it and wait for the health check
+        run: |
+          docker run -d --name net-audit -p 8080:8080 net-audit
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/api/health && exit 0
+            sleep 1
+          done
+          docker logs net-audit
+          exit 1
 
   macos:
     runs-on: macos-latest

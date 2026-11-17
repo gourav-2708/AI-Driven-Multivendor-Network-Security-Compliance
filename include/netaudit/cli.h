@@ -13,7 +13,7 @@
 #include "netaudit/severity.h"
 #include "netaudit/status.h"
 
-#define NET_AUDIT_VERSION "2.0.0"
+#define NET_AUDIT_VERSION "3.0.0"
 
 /** Process exit codes (also documented in --help and README). */
 enum {

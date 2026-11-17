@@ -14,6 +14,11 @@
  * stack of enclosing block headers, so context checks are structural
  * ("parent block is `services`") rather than string matching on a path.
  * Interface names such as ge-0/0/0 therefore need no special treatment.
+ *
+ * "display set" output ("set system host-name r1") is also accepted. Each
+ * set line is cut into the same block headers and leaf statement the brace
+ * form would have produced, and blocks stay open while consecutive lines
+ * share them, so both forms run through the same handlers.
  */
 #include "netaudit/line_reader.h"
 #include "netaudit/log.h"
@@ -117,6 +122,10 @@ static void handle_system(JState *st, char w[][JUNOS_WORD], int n, bool block)
         IS(0, "tacplus-server"))
         m->auth.aaa_configured = true;
 
+    /* "$1$..." is MD5-crypt; current JunOS writes SHA-256/512 ("$5$", "$6$"). */
+    if (IS(0, "encrypted-password") && str_starts_with(W(1), "$1$"))
+        m->auth.weak_hash = true;
+
     if (find_frame(st, "root-authentication") >= 0) {
         if (IS(0, "encrypted-password") || IS(0, "ssh-rsa") ||
             IS(0, "ssh-ecdsa") || IS(0, "ssh-ed25519"))
@@ -128,6 +137,16 @@ static void handle_system(JState *st, char w[][JUNOS_WORD], int n, bool block)
         if (IS(0, "user")) m->auth.local_users = true;
         if (IS(0, "plain-text-password") || IS(0, "plain-text-password-value"))
             m->auth.plaintext_user_password = true;
+        if (IS(0, "message") && str_eq_ci(parent, "login"))
+            m->mgmt.login_banner = true;
+        if (IS(0, "retry-options"))
+            m->auth.login_lockout = true;
+        if (IS(0, "minimum-length") && str_eq_ci(parent, "password"))
+            m->auth.password_policy = true;
+        int minutes;
+        if (IS(0, "idle-timeout") && str_to_int(W(1), &minutes) && minutes > 0 &&
+            minutes > m->mgmt.idle_timeout_min)
+            m->mgmt.idle_timeout_min = minutes;
     }
 
     /* system { services { telnet; ssh { ... } web-management { http; } } } */
@@ -272,22 +291,18 @@ static void dispatch(JState *st, char w[][JUNOS_WORD], int n, bool block)
 
 /* -- Block events ---------------------------------------------------------------- */
 
-static void open_block(JState *st)
+/* Open the block whose header is the @p n words at @p w. */
+static void push_block(JState *st, char w[][JUNOS_WORD], int n, int line, bool inactive)
 {
-    bool inactive = st->depth > 0 && st->stack[st->depth - 1].inactive;
-    int  first = 0;
-    if (st->sn > 0 && str_eq_ci(st->sw[0], "inactive:")) { inactive = true; first = 1; }
-    if (st->sn > 0 && str_eq_ci(st->sw[0], "protect:"))   first = 1;
-
-    if (!inactive) dispatch(st, st->sw + first, st->sn - first, true);
+    if (!inactive) dispatch(st, w, n, true);
 
     if (st->depth >= JUNOS_MAX_DEPTH) { st->lost_depth++; return; }
 
     JFrame *f = &st->stack[st->depth];
     memset(f, 0, sizeof(*f));
-    for (int i = 0; i < JUNOS_HDR_WORDS && first + i < st->sn; i++)
-        safe_strcpy(f->w[i], JUNOS_WORD, st->sw[first + i]);
-    f->line = st->stmt_line;
+    for (int i = 0; i < JUNOS_HDR_WORDS && i < n; i++)
+        safe_strcpy(f->w[i], JUNOS_WORD, w[i]);
+    f->line = line;
     f->inactive = inactive;
 
     /* Prepare rule accumulators. */
@@ -304,6 +319,15 @@ static void open_block(JState *st)
         f->acl = model_acl(st->m, name);
     }
     st->depth++;
+}
+
+static void open_block(JState *st)
+{
+    bool inactive = st->depth > 0 && st->stack[st->depth - 1].inactive;
+    int  first = 0;
+    if (st->sn > 0 && str_eq_ci(st->sw[0], "inactive:")) { inactive = true; first = 1; }
+    if (st->sn > 0 && str_eq_ci(st->sw[0], "protect:"))   first = 1;
+    push_block(st, st->sw + first, st->sn - first, st->stmt_line, inactive);
 }
 
 static void close_block(JState *st)
@@ -383,12 +407,140 @@ static void lex_line(JState *st, const char *p, int line)
     }
 }
 
+/* -- "display set" form ----------------------------------------------------------- */
+
+static bool word_in(const char *w, const char *const list[], size_t count)
+{
+    for (size_t i = 0; i < count; i++)
+        if (str_eq_ci(w, list[i])) return true;
+    return false;
+}
+
+/* Statements that end a set line: the word and everything after it is the
+ * leaf, e.g. "host-name r1" or "address 10.0.0.1/24". */
+static bool set_starts_leaf(const JState *st, const char *w)
+{
+    static const char *const k_leaves[] = {
+        "host-name", "version", "authentication-order", "radius-server",
+        "tacplus-server", "encrypted-password", "plain-text-password",
+        "plain-text-password-value", "ssh-rsa", "ssh-ecdsa", "ssh-ed25519",
+        "protocol-version", "message", "idle-timeout", "minimum-length",
+        "authentication-key", "authorization", "clients", "client-list-name",
+        "description", "address", "source-address", "destination-address",
+        "application",
+    };
+    if (word_in(w, k_leaves, NA_ARRAY_LEN(k_leaves))) return true;
+    if ((str_eq_ci(w, "input") || str_eq_ci(w, "output")) && parent_is(st, "filter"))
+        return true;                                  /* filter input NAME */
+    return str_eq_ci(w, "server") && parent_is(st, "ntp");
+}
+
+/* How many name words follow block keyword @p w in its header:
+ * "community NAME", "unit N", "from-zone A to-zone B". */
+static int set_header_args(const JState *st, const char *w)
+{
+    static const char *const k_named[] = {
+        "unit", "family", "term", "security-zone", "interface-range",
+        "policy-statement",
+    };
+    if (word_in(w, k_named, NA_ARRAY_LEN(k_named))) return 1;
+    if (str_eq_ci(w, "from-zone")) return 3;
+    if (str_eq_ci(w, "community") && snmp_frame(st) >= 0) return 1;
+    if (str_eq_ci(w, "filter") && under_top(st, "firewall")) return 1;
+    if (str_eq_ci(w, "policy") && find_frame(st, "policies") >= 0) return 1;
+    if ((str_eq_ci(w, "user") || str_eq_ci(w, "class")) && parent_is(st, "login")) return 1;
+    if ((str_eq_ci(w, "host") || str_eq_ci(w, "file")) && parent_is(st, "syslog")) return 1;
+    return 0;
+}
+
+static bool frame_matches(const JFrame *f, char w[][JUNOS_WORD], int n)
+{
+    for (int i = 0; i < JUNOS_HDR_WORDS; i++) {
+        const char *want = i < n ? w[i] : "";
+        if (strcmp(f->w[i], want) != 0) return false;
+    }
+    return true;
+}
+
+/* "deactivate ..." marks an earlier statement inactive. Only the management
+ * services are tracked; other deactivated statements stay counted. */
+static void set_deactivate(JState *st)
+{
+    if (st->sn < 4 || !str_eq_ci(st->sw[1], "system") || !str_eq_ci(st->sw[2], "services"))
+        return;
+    MgmtAccess *g = &st->m->mgmt;
+    if (str_eq_ci(st->sw[3], "telnet")) g->telnet_enabled = false;
+    if (str_eq_ci(st->sw[3], "ssh"))    g->ssh_enabled = false;
+    if (str_eq_ci(st->sw[3], "web-management")) {
+        if (st->sn == 4 || str_eq_ci(st->sw[4], "http"))  g->http_enabled = false;
+        if (st->sn == 4 || str_eq_ci(st->sw[4], "https")) g->https_enabled = false;
+    }
+}
+
+/* One "set a b c ..." line, already split into st->sw. */
+static void set_statement(JState *st)
+{
+    int depth = 0;       /* frames of the open stack this line shares */
+    int i = 1;
+    while (i < st->sn) {
+        bool last = i == st->sn - 1;
+        /* Decide with the context this line has built so far. */
+        int saved = st->depth;
+        st->depth = depth;
+        bool leaf = last || set_starts_leaf(st, st->sw[i]);
+        int  args = leaf ? 0 : set_header_args(st, st->sw[i]);
+        st->depth = saved;
+        if (leaf) break;
+        if (i + args >= st->sn) args = st->sn - 1 - i;   /* header is the tail */
+
+        if (depth < st->depth && frame_matches(&st->stack[depth], st->sw + i, args + 1)) {
+            depth++;                                  /* still inside it */
+        } else {
+            while (st->depth > depth) close_block(st);
+            push_block(st, st->sw + i, args + 1, st->stmt_line, false);
+            if (st->lost_depth > 0) { st->lost_depth--; return; }   /* too deep */
+            depth++;
+        }
+        i += args + 1;
+    }
+    while (st->depth > depth) close_block(st);
+    if (i < st->sn) dispatch(st, st->sw + i, st->sn - i, false);
+}
+
+/* Split a set/deactivate line into st->sw (quotes kept together, list
+ * brackets dropped) and apply it. */
+static void set_line(JState *st, char *line, int line_number)
+{
+    char *words[NA_MAX_TOKENS];
+    int n = str_tokenize(line, words, NA_MAX_TOKENS);
+    st->sn = 0;
+    st->stmt_line = line_number;
+    for (int i = 0; i < n; i++) {
+        if (strcmp(words[i], "[") == 0 || strcmp(words[i], "]") == 0) continue;
+        safe_strcpy(st->sw[st->sn++], JUNOS_WORD, words[i]);
+    }
+    if (st->sn < 2) return;
+    if (str_eq_ci(st->sw[0], "set"))             set_statement(st);
+    else if (str_eq_ci(st->sw[0], "deactivate")) set_deactivate(st);
+    st->sn = 0;
+}
+
+static bool is_set_line(const char *line)
+{
+    while (isspace((unsigned char)*line)) line++;
+    return str_starts_with(line, "set ") || str_starts_with(line, "deactivate ");
+}
+
 /* -- probe / parse ---------------------------------------------------------------- */
 
 static int junos_probe(const ConfigSample *s)
 {
     if (sample_has_prefix(s, "## Last commit") || sample_contains_ci(s, "junos"))
         return 90;
+    if (sample_has_prefix(s, "set system ") || sample_has_prefix(s, "set interfaces ") ||
+        sample_has_prefix(s, "set version ") || sample_has_prefix(s, "set firewall ") ||
+        sample_has_prefix(s, "set security ") || sample_has_prefix(s, "set snmp "))
+        return 80;
     if (sample_has_prefix(s, "system {") || sample_has_prefix(s, "interfaces {") ||
         sample_has_prefix(s, "security {") || sample_has_prefix(s, "firewall {") ||
         sample_has_prefix(s, "snmp {"))
@@ -414,16 +566,39 @@ static AuditStatus junos_parse(const char *path, DeviceModel *m)
     memset(&st, 0, sizeof(st));
     st.m = m;
 
+    /* JunOS always timestamps its logs; the rest are the system defaults
+     * unless the config says otherwise. */
+    m->logging.timestamps = true;
+
+    bool set_form = false;
     char *line;
-    while ((line = line_reader_next(&r)) != NULL)
-        lex_line(&st, line, r.line_number);
+    while ((line = line_reader_next(&r)) != NULL) {
+        if ((set_form || st.depth == 0) && st.sn == 0 && is_set_line(line)) {
+            set_form = true;
+            set_line(&st, line, r.line_number);
+        } else if (!set_form) {
+            lex_line(&st, line, r.line_number);
+        }
+    }
 
     rc = line_reader_failed(&r) ? AUDIT_ERR_IO : AUDIT_OK;
     line_reader_close(&r);
 
-    if (st.depth != 0 || st.lost_depth != 0)
+    if (set_form) {
+        while (st.depth > 0) close_block(&st);       /* commit open terms */
+    } else if (st.depth != 0 || st.lost_depth != 0) {
         LOG_WRN("%s: unbalanced braces (%d block(s) left open)", path,
                 st.depth + st.lost_depth);
+    }
+
+    /* Sessions never time out unless a login class sets idle-timeout. */
+    if (m->mgmt.idle_timeout_min == 0) m->mgmt.idle_timeout_min = NA_TIMEOUT_NEVER;
+    /* The routing engine is protected by an input filter on lo0. */
+    for (int i = 0; i < m->interface_count; i++) {
+        const Interface *it = &m->interfaces[i];
+        if (str_starts_with_ci(it->name, "lo0") && it->acl_in[0])
+            m->mgmt.access_restricted = true;
+    }
 
     LOG_INF("juniper: parsed '%s' (%d lines, %d interfaces, %d filters/policies)",
             path, r.line_number, m->interface_count, m->acl_count);

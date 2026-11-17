@@ -22,9 +22,15 @@ static DeviceModel *clean_model(void)
     m->mgmt.ssh_enabled         = true;
     m->mgmt.ssh_version         = 2;
     m->mgmt.https_enabled       = true;
+    m->mgmt.login_banner        = true;
+    m->mgmt.access_restricted   = true;
+    m->auth.login_lockout       = true;
+    m->auth.password_policy     = true;
     m->logging.buffered_enabled = true;
+    m->logging.timestamps       = true;
     model_add_log_server(m, "192.0.2.50");
     model_add_ntp_server(m, "192.0.2.10");
+    model_add_ntp_server(m, "192.0.2.11");
     m->ntp.authenticated = true;
     return m;
 }
@@ -38,9 +44,11 @@ static int run(const char *rule_id)
 static void catalogue_is_complete(void)
 {
     static const char *const ids[] = {
-        "AUTH-001", "AUTH-002", "AUTH-003", "AUTH-004", "PASSWD-001",
-        "ACL-001", "ACL-002", "SNMP-001", "SNMP-002", "SVC-001", "SVC-002",
-        "SVC-003", "LOG-001", "LOG-002", "NTP-001", "NTP-002", "INTF-001",
+        "AUTH-001", "AUTH-002", "AUTH-003", "AUTH-004", "AUTH-005", "AUTH-006",
+        "AUTH-007", "AUTH-008", "PASSWD-001", "PASSWD-002", "PASSWD-003",
+        "ACL-001", "ACL-002", "SNMP-001", "SNMP-002", "SNMP-003", "SNMP-004",
+        "SVC-001", "SVC-002", "SVC-003", "SVC-004", "LOG-001", "LOG-002",
+        "LOG-003", "NTP-001", "NTP-002", "NTP-003", "INTF-001",
     };
     CHECK_INT(rules_count(), NA_ARRAY_LEN(ids));
     for (size_t i = 0; i < NA_ARRAY_LEN(ids); i++) {
@@ -51,7 +59,7 @@ static void catalogue_is_complete(void)
         CHECK(r->check && r->title && r->description && r->remediation);
         CHECK(str_starts_with(r->id, rule_category_code(r->category)));
     }
-    CHECK(rules_find("snmp-002") == rules_at(8));
+    CHECK(rules_find("snmp-002") == rules_at(14));
     CHECK(rules_find("NOPE-001") == NULL);
 }
 
@@ -88,6 +96,36 @@ static void ssh_v1_is_medium_variant(void)
     CHECK(s_r.findings[0].severity == SEV_MEDIUM);
     CHECK(str_contains_ci(s_r.findings[0].description, "SSHv1"));
     CHECK_INT(s_r.sev_counts[SEV_MEDIUM], 1);
+}
+
+static void session_rules(void)
+{
+    clean_model()->mgmt.idle_timeout_min = NA_TIMEOUT_NEVER;
+    CHECK_INT(run("AUTH-005"), 1);
+    CHECK_STR(s_r.findings[0].section, "management access / idle timeout (none)");
+    clean_model()->mgmt.idle_timeout_min = 30;
+    CHECK_INT(run("AUTH-005"), 1);
+    CHECK_STR(s_r.findings[0].section, "management access / idle timeout (30 min)");
+    clean_model()->mgmt.idle_timeout_min = 15;
+    CHECK_INT(run("AUTH-005"), 0);                /* 15 minutes is the limit */
+    clean_model();
+    CHECK_INT(run("AUTH-005"), 0);                /* 0: safe vendor default */
+
+    clean_model()->mgmt.login_banner = false;
+    CHECK_INT(run("AUTH-006"), 1);
+    clean_model()->mgmt.access_restricted = false;
+    CHECK_INT(run("AUTH-007"), 1);
+    clean_model()->auth.login_lockout = false;
+    CHECK_INT(run("AUTH-008"), 1);
+}
+
+static void password_policy_and_hash_rules(void)
+{
+    clean_model()->auth.password_policy = false;
+    CHECK_INT(run("PASSWD-002"), 1);
+    clean_model()->auth.weak_hash = true;
+    CHECK_INT(run("PASSWD-003"), 1);
+    CHECK(s_r.findings[0].severity == SEV_MEDIUM);
 }
 
 static void passwd_rule(void)
@@ -136,15 +174,35 @@ static void snmp_rules(void)
     for (size_t i = 0; i < NA_ARRAY_LEN(k); i++) {
         SnmpCommunity *c = model_snmp_community(clean_model(), k[i].name);
         c->restricted = true;
+        s_m.snmp.v3_configured = true;
         CHECK_INT(run("SNMP-001"), k[i].weak ? 1 : 0);
         CHECK_INT(run("SNMP-002"), 0);
     }
 
     model_snmp_community(clean_model(), "Unrestricted#99");
+    s_m.snmp.v3_configured = true;
     CHECK_INT(run("SNMP-002"), 1);
     /* Custom community strings are credentials: never printed in full. */
     CHECK(strstr(s_r.findings[0].section, "Unrestricted#99") == NULL);
     CHECK(strstr(s_r.findings[0].section, "Un***") != NULL);
+}
+
+static void snmp_access_and_version_rules(void)
+{
+    SnmpCommunity *c = model_snmp_community(clean_model(), "Writable#Str1ng");
+    c->restricted = true;
+    c->access = SNMP_RW;
+    s_m.snmp.v3_configured = true;
+    CHECK_INT(run("SNMP-003"), 1);
+    CHECK_STR(s_r.findings[0].section, "snmp / community 'Wr***' (read-write)");
+    c->access = SNMP_RO;
+    CHECK_INT(run("SNMP-003"), 0);
+
+    CHECK_INT(run("SNMP-004"), 0);                /* SNMPv3 is configured */
+    s_m.snmp.v3_configured = false;
+    CHECK_INT(run("SNMP-004"), 1);
+    clean_model();
+    CHECK_INT(run("SNMP-004"), 0);                /* no SNMP at all */
 }
 
 static void service_rules(void)
@@ -156,6 +214,8 @@ static void service_rules(void)
     clean_model()->services.udp_small_servers = true;
     CHECK_INT(run("SVC-003"), 1);
     CHECK_STR(s_r.findings[0].section, "service udp-small-servers");
+    clean_model()->services.source_routing = true;
+    CHECK_INT(run("SVC-004"), 1);
 }
 
 static void logging_and_ntp_rules(void)
@@ -169,6 +229,51 @@ static void logging_and_ntp_rules(void)
     CHECK_INT(run("NTP-002"), 0);                 /* nothing to authenticate */
     clean_model()->ntp.authenticated = false;
     CHECK_INT(run("NTP-002"), 1);
+
+    clean_model()->logging.timestamps = false;
+    CHECK_INT(run("LOG-003"), 1);
+    clean_model()->ntp.server_count = 1;
+    CHECK_INT(run("NTP-003"), 1);
+    CHECK_STR(s_r.findings[0].section, "ntp server 192.0.2.10");
+    CHECK_INT(run("NTP-001"), 0);
+}
+
+/* Every rule names the framework controls it gives evidence for. */
+static void framework_mapping(void)
+{
+    CHECK_STR(framework_key(FW_CIS),  "cis_v8");
+    CHECK_STR(framework_key(FW_PCI),  "pci_dss_4");
+    CHECK_STR(framework_key(FW_ISO),  "iso_27001_2022");
+    CHECK_STR(framework_key(FW_NIST), "nist_800_53_r5");
+    CHECK_STR(framework_title(FW_PCI), "PCI DSS v4.0");
+
+    const Rule *telnet = rules_find("AUTH-003");
+    const char *cursor = NULL;
+    char id[NA_MAX_CONTROL];
+    CHECK(rule_next_control(telnet, FW_NIST, &cursor, id, sizeof(id)));
+    CHECK_STR(id, "AC-17(2)");
+    CHECK(rule_next_control(telnet, FW_NIST, &cursor, id, sizeof(id)));
+    CHECK_STR(id, "CM-7");
+    CHECK(rule_next_control(telnet, FW_NIST, &cursor, id, sizeof(id)));
+    CHECK_STR(id, "SC-8");
+    CHECK(!rule_next_control(telnet, FW_NIST, &cursor, id, sizeof(id)));
+
+    cursor = NULL;                                 /* no CIS safeguard for a banner */
+    CHECK(!rule_next_control(rules_find("AUTH-006"), FW_CIS, &cursor, id, sizeof(id)));
+
+    for (size_t i = 0; i < rules_count(); i++) {
+        const Rule *r = rules_at(i);
+        int mapped = 0;
+        for (int f = 0; f < FW_COUNT; f++) {
+            CHECK(r->controls[f] != NULL);
+            cursor = NULL;
+            while (rule_next_control(r, (Framework)f, &cursor, id, sizeof(id))) {
+                CHECK(id[0] != '\0' && id[0] != ' ');
+                mapped++;
+            }
+        }
+        check_impl(mapped > 0, r->id, __FILE__, __LINE__);
+    }
 }
 
 static void interface_rule(void)
@@ -219,12 +324,16 @@ void suite_rules(void)
     TEST(clean_model_has_no_findings);
     TEST(auth_rules);
     TEST(ssh_v1_is_medium_variant);
+    TEST(session_rules);
     TEST(passwd_rule);
+    TEST(password_policy_and_hash_rules);
     TEST(acl_rules);
     TEST(snmp_rules);
+    TEST(snmp_access_and_version_rules);
     TEST(service_rules);
     TEST(logging_and_ntp_rules);
     TEST(interface_rule);
     TEST(model_capacity_is_enforced);
+    TEST(framework_mapping);
     TEST(scoring);
 }

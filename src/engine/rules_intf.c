@@ -20,6 +20,7 @@ const Rule RULES_INTF[] = {
       "Interface is active but has no IP address or description assigned",
       "Shut down unused interfaces and describe every active one "
       "('description <purpose>') so the inventory stays auditable.",
-      check_intf001 },
+      check_intf001,
+      { "4.8", "2.2.4", "A.8.9", "CM-7" } },
 };
 DEFINE_RULE_GROUP_COUNT(RULES_INTF);

@@ -1,5 +1,6 @@
-# Local development dependencies (same as pyproject.toml)
+# Dependencies of the web dashboard (same as pyproject.toml)
 Flask>=3.1,<4
+# Only used when MONGODB_URI is set; without it the dashboard keeps its data in SQLite
 pymongo>=4.8,<5
-# Loads MONGODB_URI from a local .env; not needed on Vercel
+# Loads settings from a local .env; not needed on Vercel or in Docker
 python-dotenv>=1,<2

@@ -34,11 +34,15 @@ static const AclEntry *acl_entry(const DeviceModel *m, const char *acl, int idx)
 
 static void registry_has_builtins(void)
 {
-    CHECK_INT(parser_count(), 3);
+    CHECK_INT(parser_count(), 7);
     CHECK(parser_find("cisco") != NULL);
     CHECK(parser_find("JUNIPER") != NULL);       /* case-insensitive */
     CHECK(parser_find("fortinet") != NULL);
-    CHECK(parser_find("arista") == NULL);
+    CHECK(parser_find("paloalto") != NULL);
+    CHECK(parser_find("arista") != NULL);
+    CHECK(parser_find("nxos") != NULL);
+    CHECK(parser_find("asa") != NULL);
+    CHECK(parser_find("huawei") == NULL);
 }
 
 static void detects_every_fixture(void)
@@ -60,6 +64,14 @@ static void detects_every_fixture(void)
         { "edge/ios_bom_crlf.cfg",        "cisco"    },
         { "edge/junos_compact.conf",      "juniper"  },
         { "edge/fortios_nested.conf",     "fortinet" },
+        { "test_11_paloalto_secure.xml",  "paloalto" },
+        { "test_12_paloalto_critical.conf","paloalto"},
+        { "test_13_arista_secure.cfg",    "arista"   },
+        { "test_14_arista_critical.cfg",  "arista"   },
+        { "test_15_nxos_medium.cfg",      "nxos"     },
+        { "test_16_asa_critical.cfg",     "asa"      },
+        { "test_17_juniper_set_secure.conf","juniper"},
+        { "edge/panos_compact.xml",       "paloalto" },
     };
     for (size_t i = 0; i < NA_ARRAY_LEN(k); i++) {
         const VendorParser *p = parser_detect(fixture(k[i].file), NULL);
@@ -118,11 +130,28 @@ static void cisco_sample_model(void)
     CHECK_INT(s_m.ntp.server_count, 0);
     CHECK_INT(s_m.logging.server_count, 0);
     CHECK(!s_m.logging.buffered_enabled);
+
+    /* Defaults when the config says nothing. */
+    CHECK(s_m.services.source_routing);
+    CHECK(!s_m.mgmt.login_banner && !s_m.mgmt.access_restricted);
+    CHECK(!s_m.auth.login_lockout && !s_m.auth.password_policy);
+    CHECK(!s_m.logging.timestamps);
 }
 
 static void cisco_secure_negations(void)
 {
     CHECK(load_fixture("test_01_cisco_secure.cfg", &s_m) != NULL);
+    /* Hardening that the session, password and logging rules look for. */
+    CHECK(s_m.mgmt.login_banner);
+    CHECK(s_m.auth.enable_secret_set && !s_m.auth.enable_password_set);  /* banner text skipped */
+    CHECK(s_m.mgmt.access_restricted);           /* access-class on every VTY block */
+    CHECK_INT(s_m.mgmt.idle_timeout_min, 10);
+    CHECK(s_m.auth.login_lockout && s_m.auth.password_policy);
+    CHECK(!s_m.auth.weak_hash);                  /* enable secret 9 */
+    CHECK(!s_m.services.source_routing);
+    CHECK(s_m.logging.timestamps);
+    CHECK(s_m.snmp.v3_configured);
+    CHECK_INT(s_m.ntp.server_count, 2);
     CHECK(!s_m.services.cdp_global);             /* "no cdp run" */
     CHECK(!s_m.mgmt.http_enabled);               /* "no ip http server" */
     CHECK(s_m.mgmt.https_enabled);
@@ -246,6 +275,56 @@ static void juniper_ignores_routing_policy_terms(void)
     CHECK_INT(s_m.ntp.server_count, 2);
 }
 
+/* "display set" output goes through the same handlers as the brace form. */
+static void juniper_set_format(void)
+{
+    CHECK(load_fixture("test_17_juniper_set_secure.conf", &s_m) != NULL);
+    CHECK_STR(s_m.hostname, "juniper-qfx-set");
+    CHECK_STR(s_m.os_version, "22.4R2.8");
+    CHECK(s_m.auth.enable_secret_set && !s_m.auth.weak_hash);
+    CHECK(s_m.auth.aaa_configured);              /* authentication-order [ ... ] */
+    CHECK(s_m.auth.local_users);
+    CHECK(s_m.auth.login_lockout && s_m.auth.password_policy);
+    CHECK(s_m.mgmt.login_banner);
+    CHECK_INT(s_m.mgmt.idle_timeout_min, 10);
+    CHECK(s_m.mgmt.ssh_enabled);
+    CHECK(!s_m.mgmt.telnet_enabled);             /* set, then deactivate */
+    CHECK(s_m.mgmt.access_restricted);           /* lo0 input filter */
+    CHECK_INT(s_m.logging.server_count, 1);
+    CHECK(s_m.logging.buffered_enabled);
+    CHECK_INT(s_m.ntp.server_count, 2);
+    CHECK(s_m.ntp.authenticated);
+    CHECK(s_m.snmp.v3_configured);
+    const SnmpCommunity *c = community(&s_m, "Qfx!Mon2024ro");
+    CHECK(c && c->restricted && c->access == SNMP_RO);
+
+    CHECK_INT(s_m.interface_count, 4);
+    const Interface *xe0 = iface(&s_m, "xe-0/0/0");
+    CHECK(xe0 && strcmp(xe0->description, "Uplink to core-1") == 0);
+    CHECK(xe0 && strcmp(xe0->ip_address, "10.70.0.2") == 0);
+    const Interface *xe1 = iface(&s_m, "xe-0/0/1");
+    CHECK(xe1 && xe1->shutdown);
+    const Interface *em0 = iface(&s_m, "em0");
+    CHECK(em0 && em0->is_management && strcmp(em0->acl_in, "MGMT-IN") == 0);
+
+    /* A term's lines are spread over several set statements. */
+    const AclEntry *ssh = acl_entry(&s_m, "PROTECT-RE", 0);
+    const AclEntry *def = acl_entry(&s_m, "PROTECT-RE", 1);
+    CHECK(ssh && ssh->action == ACL_PERMIT && !ssh->is_any_any);
+    CHECK(def && def->action == ACL_DENY);
+    CHECK(acl_entry(&s_m, "PROTECT-RE", 2) == NULL);
+    const AclEntry *web = acl_entry(&s_m, "policy web", 0);
+    CHECK(web && web->action == ACL_PERMIT && !web->is_any_any);
+}
+
+static void juniper_brace_defaults(void)
+{
+    CHECK(load_fixture("juniper_sample.conf", &s_m) != NULL);
+    CHECK_INT(s_m.mgmt.idle_timeout_min, NA_TIMEOUT_NEVER);   /* no login class sets one */
+    CHECK(s_m.logging.timestamps);
+    CHECK(!s_m.services.source_routing);
+}
+
 /* -- Fortinet FortiOS ------------------------------------------------------------- */
 
 static void fortinet_sample_model(void)
@@ -303,6 +382,208 @@ static void fortinet_edge_cases(void)
     CHECK(web && web->action == ACL_PERMIT && !web->is_any_any);
 }
 
+static void fortinet_admin_hardening(void)
+{
+    CHECK(load_fixture("test_08_fortinet_secure.conf", &s_m) != NULL);
+    CHECK_INT(s_m.mgmt.idle_timeout_min, 10);    /* admintimeout */
+    CHECK(s_m.auth.password_policy);             /* config system password-policy */
+    CHECK(s_m.auth.login_lockout);               /* FortiOS default */
+    CHECK(s_m.logging.timestamps);
+    CHECK(load_fixture("fortinet_sample.conf", &s_m) != NULL);
+    CHECK(!s_m.mgmt.access_restricted);          /* admin without trusthost */
+    CHECK(!s_m.auth.password_policy);
+}
+
+/* -- Palo Alto PAN-OS -------------------------------------------------------------- */
+
+static void paloalto_xml_model(void)
+{
+    CHECK(load_fixture("test_11_paloalto_secure.xml", &s_m) != NULL);
+    CHECK_STR(s_m.hostname, "pa-edge-secure");
+    CHECK_STR(s_m.vendor, "paloalto");
+    CHECK_STR(s_m.os_version, "10.2.4");         /* <config version="..."> */
+    CHECK(s_m.auth.enable_secret_set && !s_m.auth.weak_hash);
+    CHECK(s_m.auth.aaa_configured);              /* authentication-profile */
+    CHECK(s_m.auth.password_policy && s_m.auth.login_lockout);
+    CHECK(s_m.mgmt.ssh_enabled && s_m.mgmt.https_enabled);
+    CHECK(!s_m.mgmt.telnet_enabled && !s_m.mgmt.http_enabled);
+    CHECK(s_m.mgmt.login_banner && s_m.mgmt.access_restricted);
+    CHECK_INT(s_m.mgmt.idle_timeout_min, 10);
+    CHECK_INT(s_m.ntp.server_count, 2);
+    CHECK_STR(s_m.ntp.servers[1], "10.20.1.11");
+    CHECK(s_m.ntp.authenticated);
+    CHECK_INT(s_m.logging.server_count, 1);
+    CHECK_STR(s_m.logging.servers[0], "10.20.1.50");
+    CHECK(s_m.snmp.v3_configured);
+    CHECK_INT(s_m.snmp.community_count, 0);
+
+    CHECK_INT(s_m.interface_count, 2);
+    const Interface *e1 = iface(&s_m, "ethernet1/1");
+    CHECK(e1 && strcmp(e1->ip_address, "203.0.113.10") == 0);
+    CHECK(e1 && strcmp(e1->subnet_mask, "30") == 0);
+    CHECK(e1 && strcmp(e1->description, "Internet uplink") == 0);
+
+    const AclEntry *web = acl_entry(&s_m, "rule web-out", 0);
+    const AclEntry *deny = acl_entry(&s_m, "rule deny-all", 0);
+    CHECK(web && web->action == ACL_PERMIT && !web->is_any_any);
+    CHECK(deny && deny->action == ACL_DENY && !deny->is_any_any);
+}
+
+static void paloalto_set_model(void)
+{
+    CHECK(load_fixture("test_12_paloalto_critical.conf", &s_m) != NULL);
+    CHECK_STR(s_m.hostname, "pa-branch-legacy");
+    CHECK(s_m.mgmt.telnet_enabled && s_m.mgmt.http_enabled);   /* disable-telnet no */
+    CHECK(s_m.auth.weak_hash);                   /* $1$ phash */
+    CHECK(!s_m.auth.aaa_configured);
+    CHECK_INT(s_m.mgmt.idle_timeout_min, 60);    /* PAN-OS default */
+    const SnmpCommunity *pub = community(&s_m, "public");
+    CHECK(pub && !pub->restricted);
+    const Interface *e2 = iface(&s_m, "ethernet1/2");
+    CHECK(e2 && strcmp(e2->description, "Branch LAN") == 0);
+
+    const AclEntry *open = acl_entry(&s_m, "rule any-any", 0);
+    CHECK(open && open->is_any_any);
+    CHECK(acl_entry(&s_m, "rule old-open-rule", 0) == NULL);   /* disabled yes */
+    const AclEntry *vendor = acl_entry(&s_m, "rule vendor access", 0);   /* quoted name, [ list ] */
+    CHECK(vendor && vendor->action == ACL_PERMIT && !vendor->is_any_any);
+}
+
+/* The whole document on one line, with a comment, entities and <empty/> elements. */
+static void paloalto_compact_xml(void)
+{
+    CHECK(load_fixture("edge/panos_compact.xml", &s_m) != NULL);
+    CHECK_STR(s_m.hostname, "edge-panos");
+    CHECK_STR(s_m.os_version, "11.0.2");
+    CHECK(s_m.mgmt.login_banner);
+    CHECK(s_m.mgmt.telnet_enabled);
+    CHECK(s_m.mgmt.access_restricted);           /* <entry name='...'/> */
+    CHECK_INT(s_m.mgmt.idle_timeout_min, NA_TIMEOUT_NEVER);   /* idle-timeout 0 */
+    CHECK_INT(s_m.ntp.server_count, 1);
+    CHECK(!s_m.ntp.authenticated);               /* <none/> */
+    const SnmpCommunity *c = community(&s_m, "Pan!Edge2024ro");
+    CHECK(c && c->restricted);                   /* follows permitted-ip */
+    const Interface *e1 = iface(&s_m, "ethernet1/1");
+    const Interface *e2 = iface(&s_m, "ethernet1/2");
+    CHECK(e1 && e1->dynamic_address);
+    CHECK(e2 && e2->shutdown);
+    const AclEntry *open = acl_entry(&s_m, "rule open & wide", 0);   /* &amp; decoded */
+    CHECK(open && open->is_any_any);
+    CHECK(acl_entry(&s_m, "rule off", 0) == NULL);
+}
+
+/* -- Arista EOS -------------------------------------------------------------------- */
+
+static void arista_secure_model(void)
+{
+    CHECK(load_fixture("test_13_arista_secure.cfg", &s_m) != NULL);
+    CHECK_STR(s_m.hostname, "dc1-leaf-secure");
+    CHECK_STR(s_m.vendor, "arista");
+    CHECK_STR(s_m.os_version, "4.28.3M");        /* from the "! device:" comment */
+    CHECK(s_m.mgmt.ssh_enabled && !s_m.mgmt.telnet_enabled);   /* SSH is on by default */
+    CHECK(s_m.mgmt.https_enabled && !s_m.mgmt.http_enabled);
+    CHECK(s_m.mgmt.login_banner);
+    CHECK(s_m.auth.enable_secret_set && !s_m.auth.enable_password_set);  /* banner text skipped */
+    CHECK(s_m.mgmt.access_restricted);           /* management ssh / ip access-group */
+    CHECK_INT(s_m.mgmt.idle_timeout_min, 10);
+    CHECK(s_m.auth.aaa_configured && s_m.auth.login_lockout && s_m.auth.password_policy);
+    CHECK(s_m.auth.password_encryption && !s_m.auth.weak_hash);
+    CHECK(!s_m.services.cdp_global);
+    CHECK(s_m.snmp.v3_configured);
+    CHECK_INT(s_m.ntp.server_count, 2);
+
+    const Interface *e1 = iface(&s_m, "Ethernet1");
+    CHECK(e1 && strcmp(e1->ip_address, "10.40.0.1") == 0 && strcmp(e1->subnet_mask, "31") == 0);
+    const Interface *mg = iface(&s_m, "Management1");
+    CHECK(mg && mg->is_management && strcmp(mg->acl_in, "MGMT-IN") == 0);
+    const AclEntry *ssh = acl_entry(&s_m, "MGMT-IN", 0);     /* prefix + port */
+    CHECK(ssh && ssh->action == ACL_PERMIT && !ssh->is_any_any);
+    CHECK(strcmp(ssh ? ssh->src_addr : "", "10.40.1.0/24") == 0);
+    const AclEntry *std = acl_entry(&s_m, "SSH-SOURCES", 0);
+    CHECK(std && !std->is_any_any);
+}
+
+static void arista_critical_model(void)
+{
+    CHECK(load_fixture("test_14_arista_critical.cfg", &s_m) != NULL);
+    CHECK(s_m.mgmt.telnet_enabled);              /* management telnet / no shutdown */
+    CHECK(s_m.mgmt.http_enabled && !s_m.mgmt.https_enabled);
+    CHECK_INT(s_m.mgmt.idle_timeout_min, NA_TIMEOUT_NEVER);
+    CHECK(s_m.auth.weak_hash);                   /* secret 5 */
+    CHECK(s_m.auth.plaintext_user_password && !s_m.auth.password_encryption);  /* nopassword */
+    const SnmpCommunity *rw = community(&s_m, "netadmin");
+    CHECK(rw && rw->access == SNMP_RW && !rw->restricted);
+    const AclEntry *open = acl_entry(&s_m, "OPEN", 0);
+    CHECK(open && open->is_any_any);
+}
+
+/* -- Cisco NX-OS ------------------------------------------------------------------- */
+
+static void nxos_model(void)
+{
+    CHECK(load_fixture("test_15_nxos_medium.cfg", &s_m) != NULL);
+    CHECK_STR(s_m.hostname, "dc2-core-nxos");    /* switchname */
+    CHECK_STR(s_m.vendor, "nxos");
+    CHECK_STR(s_m.os_version, "9.3(8)");
+    CHECK(s_m.mgmt.ssh_enabled);                 /* on unless "no feature ssh" */
+    CHECK(s_m.mgmt.telnet_enabled);              /* feature telnet */
+    CHECK(s_m.mgmt.http_enabled && s_m.mgmt.https_enabled);   /* nxapi */
+    CHECK(s_m.mgmt.login_banner);                /* banner motd #...# over three lines */
+    CHECK(s_m.mgmt.access_restricted);
+    CHECK_INT(s_m.mgmt.idle_timeout_min, 15);
+    CHECK(s_m.auth.aaa_configured);
+    CHECK(s_m.auth.enable_secret_set && !s_m.auth.weak_hash);
+    CHECK(s_m.auth.password_policy);             /* strength-check is on by default */
+    CHECK(s_m.services.cdp_global && s_m.services.source_routing);
+    CHECK(s_m.snmp.v3_configured);
+
+    const SnmpCommunity *ro = community(&s_m, "dc2-ro-Monitor9");
+    const SnmpCommunity *rw = community(&s_m, "dc2rw");
+    CHECK(ro && ro->access == SNMP_RO && ro->restricted);     /* group + use-acl lines */
+    CHECK(rw && rw->access == SNMP_RW && !rw->restricted);
+    CHECK_STR(s_m.logging.servers[0], "10.50.1.50");
+    CHECK(s_m.logging.buffered_enabled);         /* logging logfile */
+    CHECK_STR(s_m.ntp.servers[0], "10.50.1.10");
+    const Interface *mg = iface(&s_m, "mgmt0");
+    CHECK(mg && mg->is_management && strcmp(mg->ip_address, "10.50.255.2") == 0);
+    const AclEntry *deny = acl_entry(&s_m, "VTY-IN", 1);
+    CHECK(deny && deny->action == ACL_DENY);
+}
+
+/* -- Cisco ASA --------------------------------------------------------------------- */
+
+static void asa_model(void)
+{
+    CHECK(load_fixture("test_16_asa_critical.cfg", &s_m) != NULL);
+    CHECK_STR(s_m.hostname, "asa-dmz-legacy");
+    CHECK_STR(s_m.vendor, "asa");
+    CHECK_STR(s_m.os_version, "9.8(2)");
+    CHECK(s_m.auth.enable_secret_set && s_m.auth.weak_hash);  /* "encrypted" */
+    CHECK(!s_m.auth.aaa_configured);
+    CHECK(s_m.mgmt.telnet_enabled && s_m.mgmt.ssh_enabled);
+    CHECK_INT(s_m.mgmt.ssh_version, 1);
+    CHECK(s_m.mgmt.https_enabled && !s_m.mgmt.http_enabled);  /* ASDM is HTTPS */
+    CHECK(!s_m.mgmt.access_restricted);          /* 0.0.0.0 0.0.0.0 */
+    CHECK_INT(s_m.mgmt.idle_timeout_min, 60);
+    CHECK_INT(s_m.logging.server_count, 0);      /* no "logging enable" */
+    CHECK(!s_m.logging.timestamps);
+
+    CHECK_INT(s_m.snmp.community_count, 1);      /* the masked one is not counted */
+    const SnmpCommunity *pub = community(&s_m, "public");
+    CHECK(pub && pub->restricted);
+
+    const Interface *out = iface(&s_m, "GigabitEthernet1/1");
+    CHECK(out && strcmp(out->acl_in, "OUTSIDE_IN") == 0);     /* access-group via nameif */
+    const Interface *mg = iface(&s_m, "Management1/1");
+    CHECK(mg && mg->is_management && mg->acl_in[0] == '\0');
+    const AclEntry *open = acl_entry(&s_m, "OUTSIDE_IN", 0);  /* remark skipped */
+    CHECK(open && open->is_any_any);
+    const AclEntry *www = acl_entry(&s_m, "INSIDE_OUT", 0);   /* netmask, not wildcard */
+    const AclEntry *grp = acl_entry(&s_m, "INSIDE_OUT", 1);   /* service object-group */
+    CHECK(www && !www->is_any_any);
+    CHECK(grp && grp->action == ACL_PERMIT && !grp->is_any_any);
+}
+
 void suite_parsers(void)
 {
     TEST(registry_has_builtins);
@@ -316,7 +597,17 @@ void suite_parsers(void)
     TEST(juniper_compact_syntax);
     TEST(juniper_srx_policies);
     TEST(juniper_ignores_routing_policy_terms);
+    TEST(juniper_set_format);
+    TEST(juniper_brace_defaults);
     TEST(fortinet_sample_model);
     TEST(fortinet_secure_nested_sections);
     TEST(fortinet_edge_cases);
+    TEST(fortinet_admin_hardening);
+    TEST(paloalto_xml_model);
+    TEST(paloalto_set_model);
+    TEST(paloalto_compact_xml);
+    TEST(arista_secure_model);
+    TEST(arista_critical_model);
+    TEST(nxos_model);
+    TEST(asa_model);
 }

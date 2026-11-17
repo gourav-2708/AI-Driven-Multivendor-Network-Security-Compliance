@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import findings, score_class, verdict, arrow, ring, bar, rule_line %}
+{% from "_macros.html" import findings, score_class, verdict, arrow, ring, bar, rule_line with context %}
 {% set fleet = report.report_type == 'aggregate' %}
 {% set score = report.avg_score if fleet else report.score %}
 {% set sev = {'critical': report.total_critical if fleet else report.critical,
@@ -42,7 +42,7 @@
     <h1>{{ 'Fleet audit' if fleet else report.hostname }}</h1>
     <div class="meta-row">
       {% if fleet %}<span>{{ report.devices_audited }} devices</span>
-      {% else %}<span>{{ report.vendor|title }}{% if report.version %} {{ report.version }}{% endif %}</span>{% endif %}
+      {% else %}<span>{{ vendor_name(report.vendor) }}{% if report.version %} {{ report.version }}{% endif %}</span>{% endif %}
       <span class="mono">{{ meta.files|join(', ') }}</span>
       <span>{{ meta.timestamp }}</span>
       <div class="dl no-print">
@@ -95,7 +95,7 @@
         <span class="dev-score">{{ d.score }}<small> / 100</small></span>
         <span>
           <span class="dev-name" style="display:block">{{ d.hostname }}</span>
-          <span class="dev-sub" style="display:block">{{ d.vendor|title }}{% if d.version %} {{ d.version }}{% endif %} · {{ verdict(d.score)|lower|title }}</span>
+          <span class="dev-sub" style="display:block">{{ vendor_name(d.vendor) }}{% if d.version %} {{ d.version }}{% endif %} · {{ verdict(d.score)|lower|title }}</span>
         </span>
         <span class="dev-counts">
           {% for k in ['critical', 'high', 'medium', 'low'] %}
@@ -115,8 +115,9 @@
     {{ rule_line() }}
     <h2 class="h-xl" id="findings-title">What to fix,<em> and how.</em></h2>
     {% if meta.severity and meta.severity != 'low' %}
-    <p class="lede" style="margin-top:18px;color:var(--text-3)">Showing {{ meta.severity }} and above.</p>
+    <p class="lede" style="margin-top:18px;color:var(--text-3)">Showing {{ meta.severity }} and above. The inventory and the finding workflow always hold every finding.</p>
     {% endif %}
+    <p class="lede" style="margin-top:18px;color:var(--text-3)">Assign, accept or track these under <a class="link-u" href="{{ url_for('findings_page') }}">Findings</a>.</p>
 
     <div class="tabs-bar no-print">
       <div class="pill-tabs small" role="tablist" aria-label="Filter by severity">
@@ -132,7 +133,7 @@
     {% if fleet %}
       {% for d in report.devices|sort(attribute='score') %}
       <div class="device-block" id="device-{{ loop.index }}">
-        <h3>{{ d.hostname }} <span>{{ d.score }}/100 · {{ d.vendor|title }}</span></h3>
+        <h3>{{ d.hostname }} <span>{{ d.score }}/100 · {{ vendor_name(d.vendor) }}</span></h3>
         {{ findings(d.findings) }}
       </div>
       {% endfor %}

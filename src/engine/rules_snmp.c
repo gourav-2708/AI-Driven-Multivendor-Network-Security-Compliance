@@ -72,6 +72,23 @@ static void check_snmp002(const DeviceModel *m, FindingSink *sink)
     }
 }
 
+static void check_snmp003(const DeviceModel *m, FindingSink *sink)
+{
+    for (int i = 0; i < m->snmp.community_count; i++) {
+        const SnmpCommunity *c = &m->snmp.communities[i];
+        if (c->access != SNMP_RW) continue;
+        char shown[NA_MAX_COMMUNITY];
+        redact(c->name, shown, sizeof(shown));
+        finding_report(sink, c->line_number, "snmp / community '%s' (read-write)", shown);
+    }
+}
+
+static void check_snmp004(const DeviceModel *m, FindingSink *sink)
+{
+    if (m->snmp.community_count > 0 && !m->snmp.v3_configured)
+        finding_report(sink, -1, "snmp / version");
+}
+
 const Rule RULES_SNMP[] = {
     { "SNMP-001", CAT_SNMP, SEV_CRITICAL,
       "SNMPv1/v2c with default or weak community strings",
@@ -79,7 +96,8 @@ const Rule RULES_SNMP[] = {
       "Replace default and short community strings with long random values "
       "(8+ characters, mixed classes). Migrate to SNMPv3 with SHA "
       "authentication and AES privacy, then remove v1/v2c communities.",
-      check_snmp001 },
+      check_snmp001,
+      { "4.7", "2.2.2", "A.5.17, A.8.9", "IA-5" } },
 
     { "SNMP-002", CAT_SNMP, SEV_HIGH,
       "SNMP community without restricting ACL",
@@ -87,6 +105,25 @@ const Rule RULES_SNMP[] = {
       "Bind every community to an ACL or client list of NMS addresses "
       "(IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; "
       "FortiOS: community 'hosts').",
-      check_snmp002 },
+      check_snmp002,
+      { "12.3", "2.2.6", "A.8.20, A.8.21", "AC-3, SC-7" } },
+
+    { "SNMP-003", CAT_SNMP, SEV_HIGH,
+      "Read-write SNMP community",
+      "An SNMPv1/v2c community grants read-write access",
+      "Remove read-write communities. If SNMP writes are needed, use an "
+      "SNMPv3 user with authentication and privacy, limited by a view. "
+      "Anyone who learns a read-write community can change the device.",
+      check_snmp003,
+      { "", "2.2.6", "A.8.2, A.8.21", "AC-6, CM-7" } },
+
+    { "SNMP-004", CAT_SNMP, SEV_MEDIUM,
+      "SNMPv1/v2c in use without SNMPv3",
+      "SNMP runs only as v1/v2c, which sends community strings and data unencrypted",
+      "Configure SNMPv3 users with SHA authentication and AES privacy "
+      "(authPriv), move the management station to them, then remove the "
+      "v1/v2c communities.",
+      check_snmp004,
+      { "3.10, 12.6", "1.2.6, 2.2.5", "A.8.21, A.8.24", "CM-7, SC-8" } },
 };
 DEFINE_RULE_GROUP_COUNT(RULES_SNMP);

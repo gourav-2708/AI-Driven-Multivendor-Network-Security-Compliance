@@ -35,14 +35,14 @@
           <a class="mono" href="{{ url_for('results_page', aid=e.id) }}">{{ e.files|join(', ') }}</a>
           <span class="hist-meta">
             {% if e.error %}<span style="color:var(--crit)">Audit failed</span>{% else %}{{ 'Fleet report' if e.report_type == 'aggregate' else 'Device report' }} · {{ e.devices }} device{{ '' if e.devices == 1 else 's' }}{% endif %}
-            · {{ e.vendor|title if e.vendor != 'auto' else 'Auto-detect' }} · {{ e.timestamp }}
+            · {{ vendor_name(e.vendor) if e.vendor != 'auto' else 'Auto-detect' }} · {{ e.timestamp }}{% if e.by %} · {{ e.by }}{% endif %}
           </span>
         </div>
         <div class="hist-actions">
           <a class="btn btn-ghost btn-sm" href="{{ url_for('results_page', aid=e.id) }}">Open</a>
           {% if not e.error %}<a class="btn btn-ghost btn-sm" href="/api/download/{{ e.id }}/json">JSON</a>{% endif %}
-          <button class="btn btn-ghost btn-sm btn-danger" type="button" data-delete="{{ e.id }}"
-                  aria-label="Delete audit from {{ e.timestamp }}">Delete</button>
+          {% if can('admin') %}<button class="btn btn-ghost btn-sm btn-danger" type="button" data-delete="{{ e.id }}"
+                  aria-label="Delete audit from {{ e.timestamp }}">Delete</button>{% endif %}
         </div>
       </li>
       {% endfor %}
@@ -65,7 +65,7 @@ document.querySelectorAll('[data-delete]').forEach(function (btn) {
     if (!confirm('Delete this audit? This cannot be undone.')) return;
     btn.disabled = true;
     try {
-      const r = await fetch('/api/result/' + btn.dataset.delete, { method: 'DELETE' });
+      const r = await fetch('/api/result/' + btn.dataset.delete, { method: 'DELETE', headers: { 'X-CSRF-Token': window.csrfToken() } });
       if (!r.ok) throw new Error();
       btn.closest('li').remove();
     } catch (_) {

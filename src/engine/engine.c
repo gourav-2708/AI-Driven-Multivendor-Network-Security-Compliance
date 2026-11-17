@@ -29,7 +29,58 @@ const char *rule_category_title(RuleCategory c)
     return (unsigned)c < CAT_COUNT ? k_categories[c].title : "?";
 }
 
+/* -- Frameworks -------------------------------------------------------------- */
+
+static const struct { const char *key, *title, *label; } k_frameworks[FW_COUNT] = {
+    [FW_CIS]  = { "cis_v8",         "CIS Controls v8",       "CIS"  },
+    [FW_PCI]  = { "pci_dss_4",      "PCI DSS v4.0",          "PCI"  },
+    [FW_ISO]  = { "iso_27001_2022", "ISO/IEC 27001:2022",    "ISO"  },
+    [FW_NIST] = { "nist_800_53_r5", "NIST SP 800-53 Rev. 5", "NIST" },
+};
+
+const char *framework_key(Framework f)
+{
+    return (unsigned)f < FW_COUNT ? k_frameworks[f].key : "?";
+}
+
+const char *framework_title(Framework f)
+{
+    return (unsigned)f < FW_COUNT ? k_frameworks[f].title : "?";
+}
+
+const char *framework_label(Framework f)
+{
+    return (unsigned)f < FW_COUNT ? k_frameworks[f].label : "?";
+}
+
+bool rule_next_control(const Rule *r, Framework f, const char **cursor,
+                       char *out, size_t out_size)
+{
+    if (!r || !cursor || !out || out_size == 0 || (unsigned)f >= FW_COUNT) return false;
+    const char *p = *cursor ? *cursor : r->controls[f];
+    if (!p) return false;
+    while (*p == ',' || *p == ' ') p++;
+    *cursor = p;
+    if (*p == 0) return false;
+
+    const char *end = p;
+    while (*end && *end != ',') end++;
+    size_t len = (size_t)(end - p);
+    while (len > 0 && p[len - 1] == ' ') len--;
+    safe_strncpy_n(out, out_size, p, len);
+    *cursor = end;
+    return true;
+}
+
 /* -- Findings ---------------------------------------------------------------- */
+
+/* The format attribute is required, not decoration: Clang's
+ * -Wformat-nonliteral (part of -Wformat=2) rejects passing a format string
+ * on to a v*printf-style function unless the caller is itself declared as
+ * one. GCC does not check va_list callers, so only Clang builds notice. */
+static void add_finding(FindingSink *sink, Severity sev, const char *desc,
+                        const char *rem, int line, const char *fmt, va_list ap)
+     NA_PRINTF(6, 0);
 
 static void add_finding(FindingSink *sink, Severity sev, const char *desc,
                         const char *rem, int line, const char *fmt, va_list ap)

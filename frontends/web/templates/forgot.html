@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}Reset password{% endblock %}
+{% block subnav_bar %}{% endblock %}
+{% block content %}
+<section class="auth">
+  <form class="auth-card form" method="post">
+    {{ csrf() }}
+    <div>
+      <h1>Reset your password</h1>
+      <p class="lede">Enter your email address. If it has an account, we send a link that lets you choose a new password. The link works once, for one hour.</p>
+    </div>
+    <label>Email <input class="input" type="email" name="email" autocomplete="username" required autofocus></label>
+    <button class="btn btn-primary" type="submit">Send reset link</button>
+    <p class="auth-links"><span></span><a href="{{ url_for('login_page') }}">Back to sign in</a></p>
+  </form>
+</section>
+{% endblock %}

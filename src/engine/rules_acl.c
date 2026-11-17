@@ -33,7 +33,8 @@ const Rule RULES_ACL[] = {
       "Replace 'permit any any' entries (or all/all/ALL accept policies) with "
       "rules naming specific sources, destinations and services. End every "
       "ACL with an explicit deny and document each permit.",
-      check_acl001 },
+      check_acl001,
+      { "12.2, 13.4", "1.2.5, 1.3.1, 1.4.2", "A.8.20, A.8.22", "AC-4, SC-7(5)" } },
 
     { "ACL-002", CAT_ACL, SEV_HIGH,
       "Management interface missing inbound ACL",
@@ -41,6 +42,7 @@ const Rule RULES_ACL[] = {
       "Apply an inbound ACL/filter to every management interface that admits "
       "only known management hosts and the required protocols (SSH, SNMP, "
       "HTTPS).",
-      check_acl002 },
+      check_acl002,
+      { "12.3", "", "A.8.20, A.8.22", "AC-4, SC-7" } },
 };
 DEFINE_RULE_GROUP_COUNT(RULES_ACL);

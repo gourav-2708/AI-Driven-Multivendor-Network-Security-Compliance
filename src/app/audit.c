@@ -82,7 +82,10 @@ int audit_main(const CliOptions *o)
     switch (o->action) {
     case CLI_HELP:         cli_print_usage(stdout, "net-audit"); return EXIT_CLEAN;
     case CLI_VERSION:      printf("net-audit %s\n", NET_AUDIT_VERSION); return EXIT_CLEAN;
-    case CLI_LIST_RULES:   list_rules(stdout);   return EXIT_CLEAN;
+    case CLI_LIST_RULES:
+        if (o->format == REPORT_JSON) report_rule_catalogue_json(stdout, NET_AUDIT_VERSION);
+        else                          list_rules(stdout);
+        return EXIT_CLEAN;
     case CLI_LIST_VENDORS: list_vendors(stdout); return EXIT_CLEAN;
     case CLI_RUN:          break;
     }

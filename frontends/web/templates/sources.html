@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% from "_macros.html" import rule_line, csrf with context %}
+{% block title %}Sources{% endblock %}
+
+{% block subnav %}
+<a href="#sources" class="active">Sources</a>
+{% if can('admin') %}<a href="#add">Add a source</a>{% endif %}
+<a href="#api">Submit from a pipeline</a>
+{% endblock %}
+
+{% block content %}
+<section class="page-top compact stripes-tr">
+  <div class="wrap">
+    {{ rule_line() }}
+    <p class="eyebrow">Continuous auditing</p>
+    <h1>Audit the backups <span style="color:var(--orange)">you already keep.</span></h1>
+    <div class="meta-row">
+      <span>Connect a Git repository, an Oxidized server or a folder of backups, and audit it every day or week.</span>
+      <span>Fetched configurations are deleted as soon as the audit finishes.</span>
+    </div>
+  </div>
+</section>
+
+<section class="sec-app" id="sources">
+  <div class="wrap stack">
+    {% if not scheduler %}
+    <p class="flash">The scheduler does not run in this deployment. Call <code>GET /api/cron</code> with the <code>CRON_SECRET</code> on a timer, or run sources by hand.</p>
+    {% endif %}
+    {% if sources %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Source</th><th>Kind</th><th>Schedule</th><th>Last run</th><th>Next run</th><th></th></tr></thead>
+        <tbody>
+          {% for s in sources %}
+          <tr>
+            <td><b>{{ s.name }}</b><small class="mono">{{ s.location }}{% if s.branch %} @ {{ s.branch }}{% endif %}{% if s.subdir %} / {{ s.subdir }}{% endif %}</small></td>
+            <td>{{ dict(types)[s.type] }}{% if s.has_secret %}<small>credential saved</small>{% endif %}</td>
+            <td>{{ dict(schedules)[s.schedule] }}</td>
+            <td>
+              {% if s.last_run_at %}
+              <span class="badge {{ 'ok' if s.last_status == 'ok' else 'error' }}">{{ 'Worked' if s.last_status == 'ok' else 'Failed' }}</span> {{ s.last_run_at|when }}
+              <small>{{ s.last_message }}{% if s.last_audit_id %} · <a class="link-u" href="{{ url_for('results_page', aid=s.last_audit_id) }}">report</a>{% endif %}</small>
+              {% else %}Never{% endif %}
+            </td>
+            <td>{{ s.next_run_at|when or '—' }}</td>
+            <td>
+              {% if can('auditor') %}
+              <form class="inline" method="post" action="{{ url_for('source_run', source_id=s._id) }}" data-busy="Running…">{{ csrf() }}<button class="btn btn-ghost btn-sm" type="submit">Run now</button></form>
+              {% endif %}
+              {% if can('admin') %}
+              <form class="inline" method="post" action="{{ url_for('source_delete', source_id=s._id) }}" data-confirm="Remove the source {{ s.name }}? Devices it found stay in the inventory.">{{ csrf() }}<button class="btn btn-ghost btn-sm btn-danger" type="submit">Remove</button></form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty"><strong>No sources yet</strong>{{ 'Add one below to audit your backups on a schedule.' if can('admin') else 'An administrator can add one.' }}</div>
+    {% endif %}
+
+    {% if can('admin') %}
+    <div class="panel" id="add">
+      <h2>Add a source</h2>
+      <form class="form" method="post">
+        {{ csrf() }}
+        <div class="form-row">
+          <label>Name <input class="input" name="name" maxlength="60" placeholder="Core network backups" required></label>
+          <label>Kind
+            <select name="type" id="source-type">
+              <option value="git" data-hint="https://git.example.com/network/configs.git">Git repository (also Oxidized Git output, RANCID in Git)</option>
+              <option value="oxidized" data-hint="https://oxidized.example.com">Oxidized server (REST API)</option>
+              <option value="directory" data-hint="{{ intake_root or 'switched off on this server' }}" {{ 'disabled' if not intake_root }}>Folder on this server (RANCID base directory, backup share)</option>
+            </select>
+          </label>
+        </div>
+        <label>Address or path <input class="input mono" name="location" id="source-location" required></label>
+        <div class="form-row">
+          <label data-for="git">Branch <small>optional</small><input class="input" name="branch" placeholder="main"></label>
+          <label data-for="git directory">Sub-folder <small>optional</small><input class="input" name="subdir" placeholder="configs"></label>
+          <label data-for="git oxidized">User name <small>optional</small><input class="input" name="username" autocomplete="off"></label>
+          <label data-for="git oxidized">Access token or password <small>optional</small><input class="input" type="password" name="secret" autocomplete="new-password"></label>
+        </div>
+        <div class="form-row">
+          <label>Vendor
+            <select name="vendor">
+              <option value="auto">Detect per file</option>
+              {% for key, name in engine_vendors %}<option value="{{ key }}">{{ name }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Schedule
+            <select name="schedule">
+              {% for key, name in schedules %}<option value="{{ key }}" {{ 'selected' if key == 'daily' }}>{{ name }}</option>{% endfor %}
+            </select>
+          </label>
+        </div>
+        <p class="help">Files with a .cfg, .conf, .txt, .log or .xml extension, or none at all (as Oxidized and RANCID write them), are audited.
+          Files the engine does not recognise are skipped. A saved credential is stored in the database and never shown again.
+          {% if not intake_root %}Folder sources are switched off: set <code>NET_AUDIT_INTAKE_ROOT</code> on the server to allow them.{% endif %}</p>
+        <div class="form-actions"><button class="btn btn-primary" type="submit">Add source</button></div>
+      </form>
+    </div>
+    {% endif %}
+
+    <div class="panel" id="api">
+      <h2>Submit from a pipeline</h2>
+      <p class="help">Create an API token under <a class="link-u" href="{{ url_for('settings_page') }}#tokens">Settings</a>, then post configurations from a backup job or CI pipeline. The response holds the report and what changed in the inventory.</p>
+      <pre class="code">curl -H "Authorization: Bearer $NET_AUDIT_TOKEN" \
+     -F files=@core-router-01.cfg -F files=@edge-fw-02.conf \
+     {{ request.host_url }}api/audit</pre>
+    </div>
+  </div>
+</section>
+{% endblock %}

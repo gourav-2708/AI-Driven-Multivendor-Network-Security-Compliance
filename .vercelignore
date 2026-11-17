@@ -11,9 +11,15 @@ public/
 # Never upload local audit data: uploaded configs and their reports
 frontends/web/history/
 frontends/web/uploads/
+frontends/web/work/
+frontends/web/net-audit.db*
+frontends/web/secret.key
+frontends/web/tests/
 net-audit-test-report.tmp
 
 # Not needed to build or run the web dashboard
+Dockerfile
+docker-compose.yml
 frontends/desktop/
 .github/
 **/__pycache__/

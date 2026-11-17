@@ -32,7 +32,7 @@
 static bool has_config_extension(const char *name)
 {
     return str_ends_with_ci(name, ".cfg") || str_ends_with_ci(name, ".conf") ||
-           str_ends_with_ci(name, ".txt");
+           str_ends_with_ci(name, ".txt") || str_ends_with_ci(name, ".xml");
 }
 
 static int cmp_paths(const void *a, const void *b)

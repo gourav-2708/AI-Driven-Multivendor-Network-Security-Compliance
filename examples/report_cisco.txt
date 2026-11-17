@@ -6,8 +6,8 @@
   Version : 15.7
   Source  : tests/fixtures/cisco_sample.cfg
 ----------------------------------------------------------------------------
-  Compliance Score : 2 / 100
-  Total Findings   : 18  (Critical:5  High:7  Medium:4  Low:2)
+  Compliance Score : 0 / 100
+  Total Findings   : 26  (Critical:5  High:8  Medium:9  Low:4)
 
 -- Policy Category Summary --
   Authentication (AUTH)               FAIL
@@ -24,73 +24,131 @@
   [AUTH-001] Privileged password stored in plaintext or reversible form, with no hashed secret (CRITICAL)
   Section     : auth / enable password
   Remediation : Replace 'enable password' with 'enable secret <hash>' (IOS), use encrypted-password (JunOS) or ENC-hashed admin passwords (FortiOS). Hashed secrets cannot be read back from the configuration.
+  Controls    : PCI 8.3.2 | ISO A.5.17, A.8.5 | NIST IA-5(1)
 
   [AUTH-002] AAA (Authentication, Authorization, Accounting) not configured (HIGH)
   Section     : auth / aaa
   Remediation : Enable centralised AAA: 'aaa new-model' with RADIUS/TACACS+ method lists (IOS), 'authentication-order' with radius/tacplus servers (JunOS), or remote-auth admins backed by 'config user radius' (FortiOS).
+  Controls    : CIS 6.7, 12.5 | PCI 8.2.1 | ISO A.5.15, A.5.16, A.8.5 | NIST AC-2, IA-2
 
   [AUTH-003] Telnet permitted for device management (cleartext credentials) (HIGH)
   Section     : management access / telnet
   Remediation : Allow SSH only: 'transport input ssh' on all VTY lines (IOS), remove 'system services telnet' (JunOS), remove 'telnet' from interface allowaccess (FortiOS).
+  Controls    : CIS 3.10, 4.6, 12.6 | PCI 2.2.7, 8.3.2 | ISO A.8.5, A.8.20, A.8.24 | NIST AC-17(2), CM-7, SC-8
 
   [AUTH-004] SSH not enabled; no encrypted management access configured (HIGH)
   Section     : management access / ssh
   Remediation : Enable SSHv2: 'ip ssh version 2' and 'crypto key generate rsa modulus 4096' (IOS), 'system services ssh' (JunOS), 'ssh' in allowaccess (FortiOS). Then restrict management to SSH.
+  Controls    : CIS 4.6, 12.6 | PCI 2.2.7 | ISO A.8.20, A.8.24 | NIST AC-17(2), SC-8, SC-13
+
+  [AUTH-006] No login banner warns users before they authenticate (LOW)
+  Section     : management access / login banner
+  Remediation : Show a legal notice before login: 'banner login' (IOS, NX-OS, EOS, ASA), 'system login message' (JunOS), 'pre-login-banner' (FortiOS), login-banner (PAN-OS). Do not include device or site details in it.
+  Controls    : NIST AC-8
+
+  [AUTH-007] Management logins are accepted from any source address (MEDIUM)
+  Section     : management access / permitted sources
+  Remediation : Limit who can reach the management plane: 'access-class <acl> in' on every VTY line (IOS/NX-OS), an input filter on lo0 (JunOS), 'trusthost' on every admin (FortiOS), 'ip access-group' under 'management ssh' (EOS), specific 'ssh'/'http' source networks (ASA), permitted-ip (PAN-OS).
+  Controls    : CIS 12.3 | ISO A.8.3, A.8.20 | NIST AC-17, SC-7
+
+  [AUTH-008] Repeated failed logins are not limited or locked out (MEDIUM)
+  Section     : auth / login attempts
+  Remediation : Slow down password guessing: 'login block-for' (IOS/NX-OS), 'aaa local authentication attempts max-fail' (IOS/ASA), 'system login retry-options' (JunOS), 'aaa authentication policy lockout' (EOS), admin-lockout failed-attempts (PAN-OS).
+  Controls    : PCI 8.3.4 | ISO A.8.5 | NIST AC-7
 
   [PASSWD-001] Passwords stored in plaintext: password encryption is not enabled (CRITICAL)
   Section     : service password-encryption
   Remediation : Store credentials hashed: 'secret' instead of 'password' (type 8/9 where supported) and 'service password-encryption' as a minimum on IOS; encrypted-password on JunOS; ENC admin passwords on FortiOS. Remove default credentials.
+  Controls    : PCI 8.3.2 | ISO A.5.17, A.8.5 | NIST IA-5(1)
+
+  [PASSWD-002] No minimum length or complexity is enforced for local passwords (MEDIUM)
+  Section     : auth / password policy
+  Remediation : Enforce a minimum length of 12 or more: 'security passwords min-length' (IOS), 'system login password minimum-length' (JunOS), 'config system password-policy' (FortiOS), 'password strength-check' (NX-OS), 'password-policy minimum-length' (ASA), password-complexity (PAN-OS).
+  Controls    : CIS 5.2 | PCI 8.3.6 | ISO A.5.17 | NIST IA-5(1)
 
   [ACL-001] ACL contains unrestricted 'permit any any' (allows all traffic) (CRITICAL)
   Section     : ACL 'INSECURE_ACL' entry 1 (line 68)
   Remediation : Replace 'permit any any' entries (or all/all/ALL accept policies) with rules naming specific sources, destinations and services. End every ACL with an explicit deny and document each permit.
+  Controls    : CIS 12.2, 13.4 | PCI 1.2.5, 1.3.1, 1.4.2 | ISO A.8.20, A.8.22 | NIST AC-4, SC-7(5)
 
   [ACL-002] Management interface has no inbound ACL applied (HIGH)
   Section     : interface 'GigabitEthernet0/2'
   Remediation : Apply an inbound ACL/filter to every management interface that admits only known management hosts and the required protocols (SSH, SNMP, HTTPS).
+  Controls    : CIS 12.3 | ISO A.8.20, A.8.22 | NIST AC-4, SC-7
 
   [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
   Section     : snmp / community 'public' (read-only)
   Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+  Controls    : CIS 4.7 | PCI 2.2.2 | ISO A.5.17, A.8.9 | NIST IA-5
 
   [SNMP-001] SNMPv1/v2c community string is a default or easily guessed value (CRITICAL)
   Section     : snmp / community 'private' (read-write)
   Remediation : Replace default and short community strings with long random values (8+ characters, mixed classes). Migrate to SNMPv3 with SHA authentication and AES privacy, then remove v1/v2c communities.
+  Controls    : CIS 4.7 | PCI 2.2.2 | ISO A.5.17, A.8.9 | NIST IA-5
 
   [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
   Section     : snmp / community 'public'
   Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+  Controls    : CIS 12.3 | PCI 2.2.6 | ISO A.8.20, A.8.21 | NIST AC-3, SC-7
 
   [SNMP-002] SNMP community is not restricted to known management hosts (HIGH)
   Section     : snmp / community 'private'
   Remediation : Bind every community to an ACL or client list of NMS addresses (IOS: 'snmp-server community <str> RO <acl>'; JunOS: 'clients'; FortiOS: community 'hosts').
+  Controls    : CIS 12.3 | PCI 2.2.6 | ISO A.8.20, A.8.21 | NIST AC-3, SC-7
+
+  [SNMP-003] An SNMPv1/v2c community grants read-write access (HIGH)
+  Section     : snmp / community 'private' (read-write)
+  Remediation : Remove read-write communities. If SNMP writes are needed, use an SNMPv3 user with authentication and privacy, limited by a view. Anyone who learns a read-write community can change the device.
+  Controls    : PCI 2.2.6 | ISO A.8.2, A.8.21 | NIST AC-6, CM-7
+
+  [SNMP-004] SNMP runs only as v1/v2c, which sends community strings and data unencrypted (MEDIUM)
+  Section     : snmp / version
+  Remediation : Configure SNMPv3 users with SHA authentication and AES privacy (authPriv), move the management station to them, then remove the v1/v2c communities.
+  Controls    : CIS 3.10, 12.6 | PCI 1.2.6, 2.2.5 | ISO A.8.21, A.8.24 | NIST CM-7, SC-8
 
   [SVC-001] Plain-text HTTP management access is enabled (HIGH)
   Section     : management access / http
   Remediation : Disable HTTP management ('no ip http server'; remove 'http' from web-management or allowaccess) and use HTTPS with TLS 1.2 or later and a valid certificate.
+  Controls    : CIS 4.6, 12.6 | PCI 2.2.7 | ISO A.8.20, A.8.24 | NIST AC-17(2), SC-8
 
   [SVC-002] CDP (Cisco Discovery Protocol) enabled globally (MEDIUM)
   Section     : service / cdp run
   Remediation : Run 'no cdp run', or at least 'no cdp enable' on every external and untrusted interface. CDP discloses platform, version and addressing.
+  Controls    : CIS 4.8 | PCI 2.2.4 | ISO A.8.9 | NIST CM-7
 
   [SVC-003] TCP/UDP small servers enabled (echo, chargen, discard, daytime) (MEDIUM)
   Section     : service tcp-small-servers / udp-small-servers
   Remediation : Disable with 'no service tcp-small-servers' and 'no service udp-small-servers'. These services are obsolete and can be abused for amplification attacks.
+  Controls    : CIS 4.8 | PCI 2.2.4 | ISO A.8.9 | NIST CM-7, SC-5
+
+  [SVC-004] IP source routing is enabled (the sender can choose the path) (MEDIUM)
+  Section     : service / ip source-route
+  Remediation : Disable with 'no ip source-route'. Source-routed packets let an attacker steer traffic around filters and spoof trusted addresses.
+  Controls    : CIS 4.8 | PCI 1.4.3, 2.2.4 | ISO A.8.20 | NIST CM-7, SC-7
 
   [LOG-001] No remote syslog server configured (MEDIUM)
   Section     : logging
   Remediation : Send logs to at least one remote collector ('logging host <ip>'; JunOS 'syslog host'; FortiOS 'log syslogd setting'). Centralised logs are required for security monitoring and incident response.
+  Controls    : CIS 8.2, 8.9 | PCI 10.2.1, 10.3.3 | ISO A.8.15, A.8.16 | NIST AU-4(1), AU-9(2)
 
   [LOG-002] Buffered (local) logging not enabled (LOW)
   Section     : logging buffered
   Remediation : Enable a local log buffer ('logging buffered 65536 informational'; JunOS 'syslog file'; FortiOS memory/disk logging) as a fallback when the collector is unreachable.
+  Controls    : CIS 8.2, 8.3 | PCI 10.2.1 | ISO A.8.15 | NIST AU-4, AU-12
+
+  [LOG-003] Log messages do not carry a date and time (LOW)
+  Section     : logging / timestamps
+  Remediation : Stamp every message: 'service timestamps log datetime msec show-timezone' (IOS), 'logging timestamp' (ASA). Without timestamps, events cannot be ordered or matched across devices.
+  Controls    : CIS 8.5 | PCI 10.2.2 | ISO A.8.15, A.8.17 | NIST AU-3, AU-8
 
   [NTP-001] NTP not configured; device clock may be unsynchronised (MEDIUM)
   Section     : ntp
   Remediation : Configure at least two trusted NTP servers. Accurate time is needed for log correlation, certificate validation and AAA event ordering.
+  Controls    : CIS 8.4 | PCI 10.6.1, 10.6.2 | ISO A.8.17 | NIST AU-8, SC-45(1)
 
   [INTF-001] Interface is active but has no IP address or description assigned (LOW)
   Section     : interface 'GigabitEthernet0/3'
   Remediation : Shut down unused interfaces and describe every active one ('description <purpose>') so the inventory stays auditable.
+  Controls    : CIS 4.8 | PCI 2.2.4 | ISO A.8.9 | NIST CM-7
 ============================================================================
 

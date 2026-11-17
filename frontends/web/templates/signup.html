@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}Create account{% endblock %}
+{% block subnav_bar %}{% endblock %}
+{% block content %}
+<section class="auth">
+  {% if allowed %}
+  <form class="auth-card form" method="post">
+    {{ csrf() }}
+    <div>
+      <h1>Create an account</h1>
+      <p class="lede">This starts a new organization and makes you its administrator. You can invite colleagues afterwards.</p>
+    </div>
+    <label>Organization <input class="input" name="organization" value="{{ form.get('organization', '') }}" maxlength="80" required autofocus></label>
+    <label>Your name <small>optional</small><input class="input" name="name" value="{{ form.get('name', '') }}" maxlength="80" autocomplete="name"></label>
+    <label>Email <input class="input" type="email" name="email" value="{{ form.get('email', '') }}" autocomplete="username" required></label>
+    <label>Password <small>at least 12 characters</small><input class="input" type="password" name="password" minlength="12" autocomplete="new-password" required></label>
+    <button class="btn btn-primary" type="submit">Create account</button>
+    <p class="auth-links"><span>Already have one?</span><a href="{{ url_for('login_page') }}">Sign in</a></p>
+  </form>
+  {% else %}
+  <div class="auth-card">
+    <h1>Sign-up is closed</h1>
+    <p class="lede">New accounts on this server are created by invitation. Ask an administrator of your organization to invite you.</p>
+    <a class="btn btn-primary" href="{{ url_for('login_page') }}">Sign in</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

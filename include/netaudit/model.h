@@ -56,6 +56,10 @@ typedef struct {
     bool password_encryption;      /* service password-encryption or equiv. */
     bool local_users;              /* local accounts are defined            */
     bool plaintext_user_password;  /* a local account uses a clear password */
+    bool weak_hash;                /* a credential uses a legacy/reversible
+                                      hash (MD5, IOS type 4/5/7)            */
+    bool login_lockout;            /* failed logins are limited/locked out  */
+    bool password_policy;          /* minimum length / complexity enforced  */
 } AuthConfig;
 
 /* -- Management-plane access ------------------------------------------------ */
@@ -65,7 +69,14 @@ typedef struct {
     bool telnet_enabled;
     bool http_enabled;     /* plain-text HTTP management */
     bool https_enabled;
+    int  idle_timeout_min; /* management session idle timeout in minutes:
+                              0 = not set and the vendor default is safe,
+                              NA_TIMEOUT_NEVER = sessions never time out   */
+    bool login_banner;     /* a pre-login / legal notice banner is shown   */
+    bool access_restricted;/* management logins limited to named sources   */
 } MgmtAccess;
+
+#define NA_TIMEOUT_NEVER (-1)
 
 /* -- SNMP --------------------------------------------------------------------- */
 typedef enum { SNMP_RO = 0, SNMP_RW } SnmpAccess;
@@ -88,6 +99,7 @@ typedef struct {
 /* -- Logging and time --------------------------------------------------------- */
 typedef struct {
     bool buffered_enabled;       /* local buffer / disk / memory log       */
+    bool timestamps;             /* log entries carry a date and time      */
     char servers[NA_MAX_LOG_SERVERS][NA_MAX_ADDR];
     int  server_count;
 } LoggingConfig;
@@ -103,6 +115,7 @@ typedef struct {
     bool cdp_global;
     bool tcp_small_servers;
     bool udp_small_servers;
+    bool source_routing;         /* IP source-routed packets are forwarded */
 } ServiceFlags;
 
 /* -- The device ---------------------------------------------------------------- */

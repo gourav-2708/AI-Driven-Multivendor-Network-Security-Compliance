@@ -13,6 +13,7 @@
 make            # release build -> build/release/net-audit
 make test       # must pass before every commit
 make check      # tests + CLI run over all fixtures
+make web-test   # web dashboard tests (after pip install -r frontends/web/requirements.txt)
 make debug && make MODE=debug test   # sanitizers (Linux/macOS)
 ```
 
@@ -20,12 +21,14 @@ make debug && make MODE=debug test   # sanitizers (Linux/macOS)
 
 | Change | Files |
 |---|---|
-| New compliance rule | `src/engine/rules_<category>.c`, `tests/test_rules.c`, `tests/test_regression.c`, README rule table |
+| New compliance rule | `src/engine/rules_<category>.c` (with its framework controls), `tests/test_rules.c`, `tests/test_regression.c`, README rule and framework tables, a plain-language line in `frontends/web/reports.py` |
+| Framework mapping | the `controls` of the rule in `src/engine/rules_<category>.c`; a control with no rule yet goes in `frontends/web/frameworks.py` |
 | New vendor | `src/parser/<vendor>.c`, table in `src/parser/parser_registry.c`, fixtures, `tests/test_parsers.c` |
 | New model field | `include/netaudit/model.h`, every parser that can set it |
 | New output format | `src/report/report_<fmt>.c`, table in `src/report/report.c`, `ReportFormat` in `report.h` |
 | New capacity / limit | `include/netaudit/bounds.h` only |
 | CLI option | `src/app/cli.c`, `include/netaudit/cli.h`, README usage |
+| Web dashboard | `frontends/web/*.py` (see the module list at the top of `app.py`), `templates/`, `static/`, `frontends/web/tests/test_app.py` |
 
 The architecture overview is in the [README](README.md#architecture).
 
@@ -70,6 +73,22 @@ Put new fixtures that should count toward the fleet example in
 `frontends/web` (Flask) and `frontends/desktop` (tkinter) run the CLI with
 `--format json`. Keep the JSON schema in `src/report/report_json.c`
 backwards compatible: add keys, never rename or remove them.
+
+Rules for the web dashboard:
+
+* **Every route is scoped.** Decorate it with `@require(<role>)` and load
+  documents through `_org_doc()` or a query that filters on `g.org["_id"]`.
+  A route that reads a document by id without that check leaks another
+  organization's data.
+* **Forms carry the CSRF token** (`{{ csrf() }}`); `fetch()` calls send it
+  as `X-CSRF-Token`. API tokens are exempt.
+* **Never keep a configuration.** Anything uploaded or fetched is deleted
+  in a `finally` block.
+* **Never show a stored secret again**, in a page or in the API.
+* **Log what people do** with `accounts.log(action, target, ...)`.
+* `make web-test` runs against a throw-away SQLite database and the real
+  auditor binary. Add a test for every new route, including one that
+  another organization cannot reach it.
 
 ## Reporting bugs
 

@@ -1,0 +1,24 @@
+# Keep the build context small and free of local data and secrets.
+.git
+.github
+.vercel
+.env
+build
+public
+docs
+examples
+**/__pycache__
+*.pyc
+*.exe
+*.o
+*.d
+frontends/desktop
+frontends/viewer
+frontends/web/tests
+frontends/web/history/*
+frontends/web/uploads/*
+frontends/web/work
+frontends/web/*.db
+frontends/web/*.db-*
+frontends/web/secret.key
+net-audit-test-report.tmp

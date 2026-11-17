@@ -5,10 +5,13 @@
   "functions": {
     "index.py": {
       "maxDuration": 30,
-      "includeFiles": "{build/release/net-audit,frontends/web/app.py,frontends/web/templates/**,frontends/web/static/**}",
-      "excludeFiles": "{src/**,include/**,tests/**,docs/**,examples/**,public/**,scripts/**,build/release/obj/**,build/debug/**,frontends/desktop/**,frontends/viewer/**,frontends/web/history/**,frontends/web/uploads/**,**/__pycache__/**}"
+      "includeFiles": "{build/release/net-audit,frontends/web/*.py,frontends/web/templates/**,frontends/web/static/**}",
+      "excludeFiles": "{src/**,include/**,tests/**,docs/**,examples/**,public/**,scripts/**,build/release/obj/**,build/debug/**,frontends/desktop/**,frontends/viewer/**,frontends/web/history/**,frontends/web/uploads/**,frontends/web/tests/**,**/__pycache__/**}"
     }
   },
+  "crons": [
+    { "path": "/api/cron", "schedule": "0 3 * * *" }
+  ],
   "headers": [
     {
       "source": "/static/(.*)",

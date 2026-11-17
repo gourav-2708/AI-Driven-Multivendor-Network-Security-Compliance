@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% from "_macros.html" import score_class, verdict, rule_line, trend_chart, wf_item, csrf with context %}
+{% block title %}{{ dev.hostname }}{% endblock %}
+
+{% block subnav %}
+<a href="{{ url_for('devices_page') }}">All devices</a>
+<a href="#overview" class="active">Overview</a>
+<a href="#findings">Findings</a>
+<a href="#audits">Audits</a>
+{% endblock %}
+
+{% block content %}
+<section class="page-top compact stripes-tr">
+  <div class="wrap">
+    {{ rule_line() }}
+    <p class="eyebrow">{{ vendor_name(dev.vendor) }}{% if dev.version %} {{ dev.version }}{% endif %}</p>
+    <h1>{{ dev.hostname }}</h1>
+    <div class="meta-row">
+      <span class="score {{ score_class(dev.score) }}">{{ dev.score }}</span>
+      <span>{{ verdict(dev.score)|lower|title }}</span>
+      {% if dev.site %}<span>Site: {{ dev.site }}</span>{% endif %}
+      {% if dev.owner %}<span>Owner: {{ dev.owner }}</span>{% endif %}
+      <span>Last audit {{ dev.last_audit_at|when }}</span>
+      <div class="dl"><a class="btn btn-ghost btn-sm" href="{{ url_for('results_page', aid=dev.last_audit_id) }}">Latest report</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec-app" id="overview">
+  <div class="wrap split">
+    <div class="stack">
+      <div class="tiles">
+        <div class="tile-s {{ 'bad' if dev.critical }}"><b>{{ dev.critical }}</b><span>Critical</span></div>
+        <div class="tile-s"><b>{{ dev.high }}</b><span>High</span></div>
+        <div class="tile-s"><b>{{ dev.medium }}</b><span>Medium</span></div>
+        <div class="tile-s"><b>{{ dev.low }}</b><span>Low</span></div>
+      </div>
+      <div class="panel">
+        <h2>Score over time</h2>
+        {{ trend_chart(trend, 'score after each audit') }}
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Details</h2>
+      {% if can('auditor') %}
+      <form class="form" method="post">
+        {{ csrf() }}
+        <label>Site <input class="input" name="site" value="{{ dev.site }}" maxlength="80" placeholder="Data centre, branch, region"></label>
+        <label>Owner <input class="input" name="owner" value="{{ dev.owner }}" maxlength="120" placeholder="Team or person responsible"></label>
+        <label>Notes <textarea name="notes" maxlength="1000">{{ dev.notes }}</textarea></label>
+        <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">Save</button></div>
+      </form>
+      {% else %}
+      <p>Site: {{ dev.site or '—' }}</p><p>Owner: {{ dev.owner or '—' }}</p><p class="help">{{ dev.notes }}</p>
+      {% endif %}
+      <p class="help" style="margin-top:18px">In the inventory since {{ dev.first_seen_at|day }}.</p>
+      {% if can('admin') %}
+      <form method="post" action="{{ url_for('device_delete', dev_id=dev._id) }}"
+            data-confirm="Remove {{ dev.hostname }} from the inventory, with its findings and score history? This cannot be undone.">
+        {{ csrf() }}
+        <button class="btn btn-ghost btn-sm btn-danger" type="submit">Remove device</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="sec-app" id="findings">
+  <div class="wrap">
+    <h2>Findings <small>{{ findings|length }} not yet verified as fixed</small></h2>
+    {% if findings %}
+    <ul class="wf-list">
+      {% for f in findings %}{{ wf_item(f, members, tickets, url_for('device_page', dev_id=dev._id) ~ '#findings') }}{% endfor %}
+    </ul>
+    {% else %}
+    <div class="empty"><strong>Nothing open</strong>The latest audit of this device found no problems.</div>
+    {% endif %}
+
+    {% if verified %}
+    <h2 style="margin-top:40px">Recently verified as fixed</h2>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Rule</th><th>Finding</th><th>Where</th><th>First seen</th><th>Verified</th></tr></thead>
+        <tbody>
+          {% for f in verified %}
+          <tr><td class="mono">{{ f.rule_id }}</td><td>{{ f.description }}</td><td>{{ f.section }}</td><td>{{ f.first_seen_at|day }}</td><td>{{ f.resolved_at|day }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+<section class="sec-app" id="audits">
+  <div class="wrap">
+    <h2>Audits of this device</h2>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>When</th><th class="num">Score</th><th class="num">Crit</th><th class="num">High</th><th class="num">Med</th><th class="num">Low</th><th>Report</th></tr></thead>
+        <tbody>
+          {% for p in trend|reverse %}
+          <tr><td>{{ p.at|when }}</td><td class="num"><span class="score {{ score_class(p.score) }}">{{ p.score }}</span></td>
+              <td class="num">{{ p.critical }}</td><td class="num">{{ p.high }}</td><td class="num">{{ p.medium }}</td><td class="num">{{ p.low }}</td>
+              <td><a class="link-u" href="{{ url_for('results_page', aid=p.audit_id) }}">{{ p.audit_id }}</a></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+{% endblock %}
