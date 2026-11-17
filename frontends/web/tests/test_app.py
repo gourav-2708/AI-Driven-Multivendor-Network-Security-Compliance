@@ -138,12 +138,14 @@ class DashboardTests(unittest.TestCase):
     # -- accounts ---------------------------------------------------------------
     def test_01_everything_needs_a_login(self):
         for path in ("/", "/devices", "/findings", "/compliance", "/history", "/settings",
-                     "/sources", "/alerts", "/reports/executive.pdf", "/results/0ldaud1t"):
+                     "/sources", "/alerts", "/reports/executive.pdf", "/results/0ldaud1t",
+                     "/controls/pci_dss_4/8.4.1", "/controls/unlock"):
             r = self.anon.get(path)
             self.assertEqual(r.status_code, 302, path)
             self.assertIn("/login", r.headers["Location"], path)
         for path in ("/api/history", "/api/devices", "/api/findings", "/api/compliance",
-                     "/api/result/0ldaud1t", "/api/download/0ldaud1t/json"):
+                     "/api/result/0ldaud1t", "/api/download/0ldaud1t/json",
+                     "/api/controls/pci_dss_4/8.4.1"):
             self.assertEqual(self.anon.get(path).status_code, 401, path)
         self.assertEqual(self.anon.c.delete("/api/result/0ldaud1t").status_code, 401)
         self.assertEqual(self.anon.get("/api/health").status_code, 200)
@@ -442,6 +444,145 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(z.read("evidence.pdf").startswith(b"%PDF"))
         all_fw = zipfile.ZipFile(io.BytesIO(self.alice.get("/reports/evidence.zip").data))
         self.assertEqual(len(json.loads(all_fw.read("manifest.json"))["frameworks"]), 4)
+
+    # -- control register ---------------------------------------------------------------
+    def _control(self, client, key, cid):
+        r = client.get(f"/api/controls/{key}/{cid}")
+        self.assertEqual(r.status_code, 200, r.data)
+        return r.get_json()
+
+    def _pci(self, client=None):
+        data = {fw["key"]: fw for fw in (client or self.alice).get("/api/compliance").get_json()}
+        return data["pci_dss_4"], {c["id"]: c for c in data["pci_dss_4"]["controls"]}
+
+    def test_53_register_needs_an_unlocked_admin(self):
+        url = "/controls/pci_dss_4/8.4.1"
+        form = {"action": "update", "owner": "", "implementation": "implemented"}
+        self.assertEqual(self.victor.get(url).status_code, 200)               # viewers can read
+        self.assertIn(b"Only an administrator", self.victor.get(url).data)
+        self.assertEqual(self.victor.post(url, form).status_code, 302)
+        self.assertEqual(self.victor.get("/controls/unlock").status_code, 302)  # admin only
+        self.assertEqual(store().count("controls"), 0)
+
+        r = self.alice.post(url, form)                                        # admin, still locked
+        self.assertEqual(r.status_code, 302)
+        self.assertIn("/controls/unlock", r.headers["Location"])
+        self.assertEqual(store().count("controls"), 0)
+        self.assertIn(b"Unlock control management", self.alice.get("/compliance").data)
+
+        r = self.alice.post("/controls/unlock?next=" + url, {"password": "not the password"})
+        self.assertEqual(r.status_code, 400)
+        r = self.alice.post("/controls/unlock?next=" + url, {"password": PASSWORD})
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(r.headers["Location"].endswith(url))
+        self.assertEqual(accounts.find_user("alice@acme.test")["failed_logins"], 0)
+        self.assertIn(b"Lock control management", self.alice.get("/compliance").data)
+        r = self.alice.post("/controls/unlock?next=https://evil.test/", {"password": PASSWORD})
+        self.assertFalse(r.headers["Location"].startswith("https://evil"))      # stays on this site
+
+        # Locking again takes the edit right away until the next unlock.
+        self.assertEqual(self.alice.post("/controls/lock").status_code, 302)
+        self.assertEqual(self.alice.post(url, form).status_code, 302)
+        self.assertEqual(store().count("controls"), 0)
+
+    def test_54_attest_a_control_no_rule_checks(self):
+        from storage import later
+        url = "/controls/pci_dss_4/8.4.1"
+        self.alice.post("/controls/unlock", {"password": PASSWORD})
+        before, ctl = self._pci()
+        self.assertEqual(ctl["8.4.1"]["status"], "not_covered")
+
+        bad_owner = {"action": "update", "owner": "mallory@other.test", "implementation": "implemented"}
+        self.alice.post(url, bad_owner)                                      # not a member
+        self.assertEqual(store().count("controls"), 0)
+        review = later(days=90)[:10]
+        self.alice.post(url, {"action": "update", "owner": "victor@acme.test",
+                              "implementation": "implemented", "next_review": review,
+                              "notes": "MFA on the VPN for all admins"})
+        c = self._control(self.alice, "pci_dss_4", "8.4.1")
+        self.assertEqual((c["register"]["owner"], c["register"]["implementation"]),
+                         ("victor@acme.test", "implemented"))
+        self.assertEqual(c["status"], "not_covered")                          # no evidence yet
+
+        self.alice.post(url, {"action": "evidence_add", "text": "VPN MFA policy", "link": "javascript:alert(1)"})
+        self.assertEqual(self._control(self.alice, "pci_dss_4", "8.4.1")["evidence"], [])
+        self.alice.post(url, {"action": "evidence_add", "text": "VPN MFA policy SEC-12",
+                              "link": "https://wiki.acme.test/sec-12"})
+        c = self._control(self.alice, "pci_dss_4", "8.4.1")
+        self.assertEqual(c["status"], "attested")
+        self.assertEqual(c["evidence"][0]["by"], "alice@acme.test")
+        self.assertEqual([h["action"] for h in c["history"]], ["updated", "evidence_added"])
+
+        after, ctl = self._pci()
+        self.assertEqual(ctl["8.4.1"]["status"], "attested")
+        self.assertEqual(after["counts"]["attested"], 1)
+        self.assertEqual(after["counts"]["not_covered"], before["counts"]["not_covered"] - 1)
+        page = self.alice.get("/compliance?fw=pci_dss_4").data
+        self.assertIn(b"victor@acme.test", page)
+        self.assertIn(b"Attested", page)
+
+        # The other organization sees none of it.
+        other = self._control(self.mallory, "pci_dss_4", "8.4.1")
+        self.assertEqual((other["status"], other["evidence"], other["register"]["owner"]),
+                         ("not_covered", [], ""))
+
+        # Evidence that is removed takes the attestation with it.
+        item = c["evidence"][0]["id"]
+        self.alice.post(url, {"action": "evidence_remove", "evidence_id": item})
+        self.assertEqual(self._control(self.alice, "pci_dss_4", "8.4.1")["status"], "not_covered")
+        self.alice.post(url, {"action": "evidence_add", "text": "VPN MFA policy SEC-12"})
+        self.assertEqual(self._control(self.alice, "pci_dss_4", "8.4.1")["status"], "attested")
+
+    def test_55_overdue_review_and_not_applicable(self):
+        doc = store().get("controls", accounts.find_user("alice@acme.test")["org_id"] + ":pci_dss_4:8.4.1")
+        doc["next_review"] = "2020-01-01"
+        store().replace("controls", doc)
+        c = self._control(self.alice, "pci_dss_4", "8.4.1")
+        self.assertEqual(c["status"], "not_covered")                          # overdue: no longer attested
+        self.assertTrue(c["register"]["review_overdue"])
+        self.alice.post("/controls/pci_dss_4/8.4.1", {"action": "reviewed", "next_review": "2020-02-02"})
+        self.assertTrue(self._control(self.alice, "pci_dss_4", "8.4.1")["register"]["review_overdue"])
+        from storage import later
+        self.alice.post("/controls/pci_dss_4/8.4.1", {"action": "reviewed", "next_review": later(days=180)[:10]})
+        c = self._control(self.alice, "pci_dss_4", "8.4.1")
+        self.assertEqual(c["status"], "attested")
+        self.assertTrue(c["register"]["last_reviewed_at"])
+
+        url = "/controls/pci_dss_4/1.3.2"
+        self.alice.post(url, {"action": "update", "implementation": "not_applicable", "na_reason": "short"})
+        self.assertEqual(self._control(self.alice, "pci_dss_4", "1.3.2")["status"], "not_covered")
+        self.alice.post(url, {"action": "update", "implementation": "not_applicable",
+                              "na_reason": "No cardholder data passes through these routers"})
+        _, ctl = self._pci()
+        self.assertEqual(ctl["1.3.2"]["status"], "not_applicable")
+
+        # A control that a rule checks keeps its audit status, with the owner alongside.
+        self.alice.post("/controls/pci_dss_4/2.2.2", {"action": "update", "owner": "alice@acme.test",
+                                                       "implementation": "implemented"})
+        c = self._control(self.alice, "pci_dss_4", "2.2.2")
+        self.assertEqual((c["status"], c["register"]["owner"]), ("fail", "alice@acme.test"))
+
+        self.assertEqual(self.alice.get("/api/controls/pci_dss_4/99.99").status_code, 404)
+        self.assertEqual(self.alice.get("/api/controls/nope/8.4.1").status_code, 404)
+        log = self.alice.get("/settings/audit-log.csv").data.decode("utf-8-sig")
+        for action in ("controls.unlock", "control.update", "control.evidence_add", "control.reviewed"):
+            self.assertIn(action, log)
+
+    def test_56_unlock_expires_and_register_is_in_the_evidence_pack(self):
+        with self.alice.c.session_transaction() as s:
+            s["admin_until"] = "2020-01-01T00:00:00Z"
+        r = self.alice.post("/controls/pci_dss_4/8.4.1", {"action": "update", "owner": ""})
+        self.assertIn("/controls/unlock", r.headers["Location"])
+        self.assertEqual(self._control(self.alice, "pci_dss_4", "8.4.1")["register"]["owner"],
+                         "victor@acme.test")
+
+        z = zipfile.ZipFile(io.BytesIO(self.alice.get("/reports/evidence.zip?fw=pci_dss_4").data))
+        rows = z.read("controls.csv").decode("utf-8-sig")
+        self.assertIn("next_review", rows.splitlines()[0])
+        self.assertIn("VPN MFA policy SEC-12", rows)
+        self.assertIn("No cardholder data passes through these routers", rows)
+        self.assertIn(b"Attested", z.read("evidence.pdf"))
+        self.assertTrue(self.alice.get("/reports/executive.pdf").data.startswith(b"%PDF"))
 
     # -- sources ----------------------------------------------------------------------
     def test_60_source_validation(self):

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import rule_line with context %}
+{% from "_macros.html" import rule_line, csrf with context %}
 {% block title %}Compliance{% endblock %}
 
 {% block subnav %}
@@ -8,7 +8,18 @@
 {% endfor %}
 {% endblock %}
 {% block subnav_cta %}
+<div class="subnav-cta">
+{% if can('admin') %}
+  {% if admin_unlocked %}
+  <form method="post" action="{{ url_for('controls_lock', next=request.full_path) }}">
+    {{ csrf() }}<button class="btn btn-ghost btn-nav" type="submit">Lock control management</button>
+  </form>
+  {% else %}
+  <a class="btn btn-ghost btn-nav" href="{{ url_for('controls_unlock', next=request.full_path) }}">Unlock control management</a>
+  {% endif %}
+{% endif %}
 <a class="btn btn-primary btn-nav" href="{{ url_for('report_evidence') }}">Evidence pack</a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -36,32 +47,32 @@
          href="{{ url_for('compliance_page', fw=s.key) }}#controls">
         <b>{% if s.score is none %}—{% else %}{{ s.score }}<small> %</small>{% endif %}</b>
         <span>{{ s.title }}</span>
-        <small class="muted">{{ s.counts.pass }} passing · {{ s.counts.fail }} failing · {{ s.counts.not_covered }} with no rule yet</small>
+        <small class="muted">{{ s.counts.pass + s.counts.attested }} passing · {{ s.counts.fail }} failing · {{ s.counts.not_covered }} without evidence{% if s.review_overdue %} · {{ s.review_overdue }} review{{ '' if s.review_overdue == 1 else 's' }} overdue{% endif %}</small>
       </a>
       {% endfor %}
     </div>
-    <p class="help">The percentage is the share of controls with no open finding, out of the controls net-audit can check.
-      A control with no rule yet is outside that share and needs other evidence. The mapping comes from the engine
+    <p class="help">The percentage is the share of controls that pass an audit or are attested in the control register,
+      out of all assessed controls. A control no rule checks becomes <b>Attested</b> when an administrator records it as
+      implemented, adds evidence, and keeps its review date current. Controls recorded as not applicable are left out.
+      Open a control to see or change its owner, evidence and review date. The mapping comes from the engine
       (<code>net-audit --list-rules --format json</code>); review it against your own copy of each framework before relying on it in an audit.</p>
 
     {% if fw %}
     <div id="controls">
-      <h2>{{ fw.title }} <small>{{ fw.covered }} of {{ fw.total }} listed controls have a rule</small></h2>
+      <h2>{{ fw.title }} <small>{{ fw.covered }} of {{ fw.total }} listed controls have a rule · {{ fw.owned }} have an owner</small></h2>
       <div class="filters">
         <a class="btn btn-ghost btn-sm" href="{{ url_for('report_evidence', fw=fw.key) }}">Evidence pack for {{ fw.label }} (ZIP)</a>
-        {% for key in ['fail', 'accepted', 'pass', 'not_assessed', 'not_covered'] if fw.counts[key] %}
+        {% for key in ['fail', 'accepted', 'pass', 'attested', 'not_assessed', 'not_covered', 'not_applicable'] if fw.counts[key] %}
         <span class="badge c-{{ key }}">{{ control_label[key] }} · {{ fw.counts[key] }}</span>
         {% endfor %}
       </div>
       <div class="table-wrap">
         <table class="data">
-          <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Checked by</th><th>Evidence</th></tr></thead>
+          <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Owner</th><th>Checked by</th><th>Evidence</th></tr></thead>
           <tbody>
-            {% for c in fw.controls if c.status == 'fail' %}{{ row(c) }}{% endfor %}
-            {% for c in fw.controls if c.status == 'accepted' %}{{ row(c) }}{% endfor %}
-            {% for c in fw.controls if c.status == 'pass' %}{{ row(c) }}{% endfor %}
-            {% for c in fw.controls if c.status == 'not_assessed' %}{{ row(c) }}{% endfor %}
-            {% for c in fw.controls if c.status == 'not_covered' %}{{ row(c) }}{% endfor %}
+            {% for st in ['fail', 'accepted', 'pass', 'attested', 'not_assessed', 'not_covered', 'not_applicable'] %}
+            {% for c in fw.controls if c.status == st %}{{ row(c) }}{% endfor %}
+            {% endfor %}
           </tbody>
         </table>
       </div>
@@ -73,9 +84,11 @@
 
 {% macro row(c) %}
 <tr>
-  <td class="mono">{{ c.id }}</td>
+  <td class="mono"><a class="link-u" href="{{ url_for('control_page', key=fw.key, control_id=c.id) }}">{{ c.id }}</a></td>
   <td>{{ c.title }}</td>
-  <td><span class="badge c-{{ c.status }}">{{ control_label[c.status] }}</span></td>
+  <td><span class="badge c-{{ c.status }}">{{ control_label[c.status] }}</span>
+    {% if c.register.review_overdue %}<br><small class="badge c-fail">review overdue</small>{% endif %}</td>
+  <td>{{ c.register.owner or '—' }}</td>
   <td class="mono">{% for r in c.rules %}<a class="link-u" href="{{ url_for('findings_page', q=r) }}">{{ r }}</a>{{ ' ' }}{% else %}—{% endfor %}</td>
   <td>
     {% if c.status == 'fail' %}
@@ -87,8 +100,12 @@
       No open finding on {{ devices }} device{{ '' if devices == 1 else 's' }}
     {% elif c.status == 'not_assessed' %}
       No device audited yet
+    {% elif c.status == 'attested' %}
+      {{ c.register.evidence_count }} evidence item{{ '' if c.register.evidence_count == 1 else 's' }}, review by {{ c.register.next_review or '—' }}
+    {% elif c.status == 'not_applicable' %}
+      Not applicable: {{ c.register.na_reason|truncate(90) }}
     {% else %}
-      Not checked by net-audit
+      Not checked by net-audit{% if c.register.evidence_count %}; {{ c.register.evidence_count }} evidence item{{ '' if c.register.evidence_count == 1 else 's' }}, not yet attested{% endif %}
     {% endif %}
   </td>
 </tr>

@@ -90,6 +90,9 @@ SEVERITIES = ("critical", "high", "medium", "low")
 SIGNUP_MODE = (os.environ.get("NET_AUDIT_SIGNUP") or "open").strip().lower()
 COOKIE_SECURE = _flag("NET_AUDIT_COOKIE_SECURE", ON_VERCEL)
 SESSION_HOURS = _int("NET_AUDIT_SESSION_HOURS", 12)
+# Changing the control register needs an admin who re-entered their password
+# this many minutes ago or less.
+ADMIN_UNLOCK_MINUTES = _int("NET_AUDIT_ADMIN_UNLOCK_MINUTES", 15)
 PASSWORD_MIN_LENGTH = 12
 LOGIN_MAX_FAILURES = 5
 LOGIN_LOCK_MINUTES = 15

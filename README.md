@@ -419,6 +419,7 @@ user's organization.
 | **Findings** | Each finding is open, assigned, risk accepted, fixed or verified. Assign it to a person; accept its risk with a written reason and an expiry date (it reopens when that passes); mark it fixed. The next audit of the device verifies a fix when the finding is gone and reopens it when it is not. |
 | **Alerts** | A drift alert when a device scores lower than at its previous audit, or a critical finding is new. Sent to Slack and email when set up. |
 | **Compliance** | Per framework: which controls pass, which fail (and on which devices), which have an accepted risk, and which no rule covers yet. |
+| **Control register** | Every control has an owner, an implementation state (implemented, partly, planned, not applicable with a reason), notes, evidence items with links, a next-review date and a change history. A control no rule checks counts as **Attested** once it is implemented, has evidence and is not overdue for review; one recorded as not applicable leaves the score. Only administrators can change the register, and only after re-entering their password, which unlocks it for 15 minutes. Owners and evidence go into the evidence pack. |
 | **Sources** | Audit a Git repository of configs (also Oxidized's Git output, or RANCID kept in Git), an Oxidized server over its REST API, or a folder on the server (a RANCID base directory, a backup share) every day or week. Fetched files are deleted when the audit finishes. |
 | **Reports** | An executive PDF (score, trend, top risks in plain language) and an auditor evidence pack (ZIP: per-control status as PDF and CSV, every finding with its dates, a manifest with checksums). The executive report can be emailed weekly or monthly. |
 | **Integrations** | Slack webhook and email for alerts; a ticket in Jira or ServiceNow from any finding. |
@@ -457,6 +458,7 @@ documents each one. The ones that matter most:
 | `MONGODB_URI` | store everything in MongoDB; unset, a SQLite file in the data directory is used |
 | `NET_AUDIT_SECRET_KEY` | signs session cookies; unset, a key is generated in the data directory |
 | `NET_AUDIT_SIGNUP` | `closed`: after the first account, users must be invited |
+| `NET_AUDIT_ADMIN_UNLOCK_MINUTES` | how long control management stays unlocked after an admin re-enters their password (default 15) |
 | `NET_AUDIT_BASE_URL` | public address, for links in emails |
 | `SMTP_HOST`, `SMTP_FROM`, ... | email for invitations, resets, alerts and reports; without it, one-time links are shown to the admin and written to the server log |
 | `NET_AUDIT_INTAKE_ROOT` | the only folder "folder" sources may read; unset, they are switched off |

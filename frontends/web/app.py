@@ -40,6 +40,7 @@ from werkzeug.utils import secure_filename  # noqa: E402
 
 import accounts  # noqa: E402
 import config  # noqa: E402
+import controls  # noqa: E402
 import engine  # noqa: E402
 import frameworks  # noqa: E402
 import intake  # noqa: E402
@@ -118,6 +119,7 @@ def inject_globals():
         "can": lambda needed: accounts.can(g.get("role"), needed),
         "csrf_token": accounts.csrf_token,
         "open_alerts": store().count("alerts", {"org_id": org["_id"], "acknowledged": False}) if org else 0,
+        "admin_unlocked": accounts.admin_unlocked() if org else False,
     }
 
 
@@ -608,7 +610,7 @@ def compliance_page():
     org_id = g.org["_id"]
     inventory.expire_risks(org_id)
     n = store().count("devices", {"org_id": org_id})
-    summary = frameworks.assess_all(inventory.findings(org_id), n)
+    summary = frameworks.assess_all(inventory.findings(org_id), n, controls.register(org_id))
     selected = request.args.get("fw") or (summary[0]["key"] if summary else "")
     current = next((s for s in summary if s["key"] == selected), summary[0] if summary else None)
     return render_template("compliance.html", summary=summary, fw=current, devices=n)
@@ -619,11 +621,110 @@ def compliance_page():
 def api_compliance():
     org_id = g.org["_id"]
     n = store().count("devices", {"org_id": org_id})
-    out = frameworks.assess_all(inventory.findings(org_id), n)
+    out = frameworks.assess_all(inventory.findings(org_id), n, controls.register(org_id))
     for fw in out:                                   # findings by id only: keep it small
         for ctl in fw["controls"]:
             ctl["findings"] = [f["_id"] for f in ctl["findings"]]
     return jsonify(out)
+
+
+# ---------------------------------------------------------------------------
+# Control register
+# ---------------------------------------------------------------------------
+def _control_view(key, control_id):
+    """The assessed control (status, rules, findings, register summary), or None."""
+    if not frameworks.framework(key) or not frameworks.control(key, control_id):
+        return None, None
+    org_id = g.org["_id"]
+    n = store().count("devices", {"org_id": org_id})
+    fw = frameworks.assess(key, inventory.findings(org_id), n, controls.register(org_id))
+    ctl = next((c for c in fw["controls"] if c["id"] == control_id), None)
+    return fw, ctl
+
+
+@app.route("/controls/<key>/<control_id>", methods=["GET", "POST"])
+@require()
+def control_page(key, control_id):
+    fw, ctl = _control_view(key, control_id)
+    if not ctl:
+        flash("That control is not in the framework.", "error")
+        return redirect(url_for("compliance_page"))
+    here = url_for("control_page", key=key, control_id=control_id)
+    entry = controls.get(g.org["_id"], key, control_id)
+    if request.method == "POST":
+        if not accounts.can(g.role, "admin"):
+            flash("Only an administrator can change the control register.", "error")
+            return redirect(here)
+        if not accounts.admin_unlocked():
+            flash("Enter your password to unlock control management.", "error")
+            return redirect(url_for("controls_unlock", next=here))
+        action = request.form.get("action", "")
+        members = {u["email"] for u in accounts.org_users(g.org["_id"]) if u.get("active")}
+        try:
+            if action == "update":
+                changed = controls.update(entry, request.form, g.user["email"], members)
+                message = "Control updated." if changed else "Nothing changed."
+            elif action == "evidence_add":
+                controls.add_evidence(entry, request.form, g.user["email"])
+                message = "Evidence added."
+            elif action == "evidence_remove":
+                controls.remove_evidence(entry, request.form.get("evidence_id", ""), g.user["email"])
+                message = "Evidence removed."
+            elif action == "reviewed":
+                controls.mark_reviewed(entry, request.form, g.user["email"])
+                message = "Review recorded."
+            else:
+                raise controls.ControlError("Unknown action.")
+        except controls.ControlError as err:
+            flash(str(err), "error")
+            return redirect(here)
+        if action != "update" or changed:
+            controls.save(entry)
+            accounts.log("control." + action, f"{key}:{control_id}")
+        flash(message, "ok")
+        return redirect(here)
+    return render_template("control.html", fw=fw, ctl=ctl, entry=entry,
+                           members=[u for u in accounts.org_users(g.org["_id"]) if u.get("active")],
+                           impl_label=controls.IMPLEMENTATION_LABEL, today=controls.today())
+
+
+@app.route("/api/controls/<key>/<control_id>")
+@require()
+def api_control(key, control_id):
+    fw, ctl = _control_view(key, control_id)
+    if not ctl:
+        return jsonify({"error": "Not found"}), 404
+    entry = controls.get(g.org["_id"], key, control_id)
+    out = dict(ctl, framework=key, findings=[f["_id"] for f in ctl["findings"]],
+               evidence=entry.get("evidence") or [], history=entry.get("history") or [])
+    return jsonify(out)
+
+
+@app.route("/controls/unlock", methods=["GET", "POST"])
+@require("admin")
+def controls_unlock():
+    target = _safe_next(url_for("compliance_page"))
+    if g.via_token:
+        return jsonify({"error": "API tokens cannot change the control register."}), 403
+    if request.method == "POST":
+        try:
+            until = accounts.unlock_admin(request.form.get("password", ""))
+        except AccountError as err:
+            flash(str(err), "error")
+            return render_template("unlock.html", next=target,
+                                   config_minutes=config.ADMIN_UNLOCK_MINUTES), 400
+        accounts.log("controls.unlock", None, until=until)
+        flash(f"Control management unlocked for {config.ADMIN_UNLOCK_MINUTES} minutes.", "ok")
+        return redirect(target)
+    return render_template("unlock.html", next=target, config_minutes=config.ADMIN_UNLOCK_MINUTES)
+
+
+@app.route("/controls/lock", methods=["POST"])
+@require()
+def controls_lock():
+    accounts.lock_admin()
+    flash("Control management locked.", "ok")
+    return redirect(_safe_next(url_for("compliance_page")))
 
 
 @app.route("/reports/executive.pdf")

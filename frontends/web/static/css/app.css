@@ -84,7 +84,8 @@ table.data td small { display: block; color: var(--text-3); font-size: 12.5px; m
 .badge.st-risk_accepted, .badge.c-accepted { color: var(--med); }
 .badge.st-fixed { color: var(--low); }
 .badge.st-verified, .badge.c-pass, .badge.ok { color: var(--ok); }
-.badge.c-not_covered, .badge.c-not_assessed, .badge.off { color: var(--text-3); }
+.badge.c-not_covered, .badge.c-not_assessed, .badge.c-not_applicable, .badge.off { color: var(--text-3); }
+.badge.c-attested { color: #3fb6d6; }
 .badge.error { color: var(--crit); }
 .sev { font-size: 11.5px; font-weight: 800; letter-spacing: .12em; white-space: nowrap; }
 .sev.critical { color: var(--crit); } .sev.high { color: var(--high); } .sev.medium { color: var(--med); } .sev.low { color: var(--low); }
@@ -163,3 +164,8 @@ pre.code { margin: 10px 0 0; padding: 14px 16px; background: #0c0c0c; border: 1p
   .sec-app, .panel, .wf, .table-wrap, .tile-s { background: #fff !important; color: #000; border-color: #ccc; }
   table.data th, table.data td small, .wf .desc, .wf-body dd { color: #333; }
 }
+
+/* Control register: more than one action in the section nav. */
+.subnav-cta { display: flex; gap: 10px; align-items: center; }
+.subnav-cta form { margin: 0; }
+@media (max-width: 700px) { .subnav-cta .btn-ghost { display: none; } }
