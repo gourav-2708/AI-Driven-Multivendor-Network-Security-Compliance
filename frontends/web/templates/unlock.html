@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}Unlock control management{% endblock %}
+{% block subnav_bar %}{% endblock %}
+{% block content %}
+<section class="auth">
+  <form class="auth-card form" method="post" action="{{ url_for('controls_unlock', next=next) }}">
+    {{ csrf() }}
+    <div>
+      <h1>Unlock control management</h1>
+      <p class="lede">Changes to the control register need an administrator. Enter your password again to
+        unlock them for {{ config_minutes }} minutes. Every change is recorded in the audit log under your name.</p>
+    </div>
+    <label>Administrator <input class="input" type="email" value="{{ user.email }}" autocomplete="username" readonly></label>
+    <label>Password <input class="input" type="password" name="password" autocomplete="current-password" required autofocus></label>
+    <button class="btn btn-primary" type="submit">Unlock</button>
+    <p class="auth-links"><a href="{{ next }}">Cancel</a></p>
+  </form>
+</section>
+{% endblock %}

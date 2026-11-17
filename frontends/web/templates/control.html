@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% from "_macros.html" import rule_line, csrf with context %}
+{% block title %}{{ fw.label }} {{ ctl.id }}{% endblock %}
+
+{% block subnav %}
+<a href="{{ url_for('compliance_page', fw=fw.key) }}#controls">{{ fw.title }}</a>
+<a href="#register" class="active">Register</a>
+<a href="#evidence">Evidence</a>
+<a href="#history">History</a>
+{% endblock %}
+{% block subnav_cta %}
+<div class="subnav-cta">
+{% if can('admin') %}
+  {% if admin_unlocked %}
+  <form method="post" action="{{ url_for('controls_lock', next=request.path) }}">
+    {{ csrf() }}<button class="btn btn-ghost btn-nav" type="submit">Lock</button>
+  </form>
+  {% else %}
+  <a class="btn btn-primary btn-nav" href="{{ url_for('controls_unlock', next=request.path) }}">Unlock to edit</a>
+  {% endif %}
+{% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+{% set reg = ctl.register %}
+{% set editable = can('admin') and admin_unlocked %}
+<section class="page-top compact stripes-tr">
+  <div class="wrap">
+    {{ rule_line() }}
+    <p class="eyebrow">{{ fw.title }}</p>
+    <h1>{{ ctl.id }} <span style="color:var(--orange)">{{ ctl.title }}</span></h1>
+    <div class="meta-row">
+      <span class="badge c-{{ ctl.status }}">{{ control_label[ctl.status] }}</span>
+      <span>Implementation: {{ impl_label[entry.implementation or ''] }}</span>
+      <span>Owner: {{ entry.owner or 'nobody yet' }}</span>
+      {% if entry.next_review %}
+      <span class="{{ 'badge c-fail' if reg.review_overdue }}">Review by {{ entry.next_review }}{% if reg.review_overdue %} (overdue){% endif %}</span>
+      {% endif %}
+      {% if entry.last_reviewed_at %}<span>Last reviewed {{ entry.last_reviewed_at|day }} by {{ entry.last_reviewed_by }}</span>{% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="sec-app" id="register">
+  <div class="wrap split">
+    <div class="stack">
+      <div class="panel">
+        <h2>What the audits show</h2>
+        {% if ctl.rules %}
+          <p>Checked by {% for r in ctl.rules %}<a class="link-u mono" href="{{ url_for('findings_page', q=r) }}">{{ r }}</a>{{ ', ' if not loop.last }}{% endfor %}.</p>
+          {% if ctl.devices %}
+          <p>{{ ctl.devices|length }} device{{ '' if ctl.devices|length == 1 else 's' }} with open findings: {{ ctl.devices|join(', ') }}</p>
+          {% elif ctl.findings %}
+          <p>{{ ctl.findings|length }} finding{{ '' if ctl.findings|length == 1 else 's' }} with accepted risk.</p>
+          {% else %}
+          <p>No open finding on the audited devices.</p>
+          {% endif %}
+        {% else %}
+          <p>No net-audit rule checks this control. It counts as <b>Attested</b> once it is recorded as
+             implemented, has at least one piece of evidence, and is not overdue for review.</p>
+        {% endif %}
+        {% if entry.implementation == 'not_applicable' %}
+          <p class="help">Recorded as not applicable: {{ entry.na_reason }}</p>
+        {% endif %}
+        {% if entry.notes %}<h3>Notes</h3><p style="white-space:pre-wrap">{{ entry.notes }}</p>{% endif %}
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Register</h2>
+      {% if editable %}
+      <form class="form" method="post">
+        {{ csrf() }}
+        <input type="hidden" name="action" value="update">
+        <label>Owner
+          <select name="owner">
+            <option value="">Nobody</option>
+            {% for m in members %}<option value="{{ m.email }}" {{ 'selected' if m.email == entry.owner }}>{{ m.name or m.email }} ({{ m.email }})</option>{% endfor %}
+          </select>
+        </label>
+        <label>Implementation
+          <select name="implementation">
+            {% for key, label in impl_label.items() %}<option value="{{ key }}" {{ 'selected' if key == (entry.implementation or '') }}>{{ label }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>Why it does not apply <small>required when not applicable</small>
+          <input class="input" name="na_reason" maxlength="500" value="{{ entry.na_reason }}" placeholder="e.g. no cardholder data passes through these devices"></label>
+        <label>Next review <input class="input" type="date" name="next_review" value="{{ entry.next_review }}" min="{{ today }}"></label>
+        <label>Notes <textarea name="notes" maxlength="2000">{{ entry.notes }}</textarea></label>
+        <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">Save</button></div>
+      </form>
+      <h3>Record a review</h3>
+      <form class="form" method="post">
+        {{ csrf() }}
+        <input type="hidden" name="action" value="reviewed">
+        <label>Next review <input class="input" type="date" name="next_review" min="{{ today }}" required></label>
+        <div class="form-actions"><button class="btn btn-ghost btn-sm" type="submit">Mark reviewed today</button></div>
+      </form>
+      {% elif can('admin') %}
+      <p class="help">The register is locked. Enter your password to change it.</p>
+      <a class="btn btn-primary btn-sm" href="{{ url_for('controls_unlock', next=request.path) }}">Unlock to edit</a>
+      {% else %}
+      <p class="help">Only an administrator can change the control register.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="sec-app" id="evidence">
+  <div class="wrap">
+    <h2>Evidence <small>{{ entry.evidence|length }} item{{ '' if entry.evidence|length == 1 else 's' }}</small></h2>
+    {% if entry.evidence %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Added</th><th>By</th><th>Evidence</th><th>Link</th>{% if editable %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+          {% for e in entry.evidence %}
+          <tr>
+            <td>{{ e.at|day }}</td><td>{{ e.by }}</td><td>{{ e.text }}</td>
+            <td>{% if e.link %}<a class="link-u" href="{{ e.link }}" target="_blank" rel="noopener noreferrer">open</a>{% else %}—{% endif %}</td>
+            {% if editable %}
+            <td>
+              <form method="post" data-confirm="Remove this evidence from {{ ctl.id }}?">
+                {{ csrf() }}<input type="hidden" name="action" value="evidence_remove"><input type="hidden" name="evidence_id" value="{{ e.id }}">
+                <button class="btn btn-ghost btn-sm btn-danger" type="submit">Remove</button>
+              </form>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty"><strong>No evidence yet</strong>Add a policy, procedure, ticket or screenshot location that shows the control is in place.</div>
+    {% endif %}
+    {% if editable %}
+    <form class="form panel" method="post" style="margin-top:18px">
+      {{ csrf() }}
+      <input type="hidden" name="action" value="evidence_add">
+      <label>Evidence <input class="input" name="text" maxlength="1000" required placeholder="e.g. MFA enforced for all VPN admins, policy SEC-12 section 4"></label>
+      <label>Link <small>optional, http(s) only</small> <input class="input" type="url" name="link" maxlength="500" placeholder="https://"></label>
+      <div class="form-actions"><button class="btn btn-primary btn-sm" type="submit">Add evidence</button></div>
+    </form>
+    {% endif %}
+  </div>
+</section>
+
+<section class="sec-app" id="history">
+  <div class="wrap">
+    <h2>History</h2>
+    {% if entry.history %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>When</th><th>Who</th><th>What</th></tr></thead>
+        <tbody>
+          {% for h in entry.history|reverse %}
+          <tr><td>{{ h.at|when }}</td><td>{{ h.by }}</td><td>{{ h.action|replace('_', ' ') }}{% if h.note %}: {{ h.note }}{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="help">Nothing recorded for this control yet.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

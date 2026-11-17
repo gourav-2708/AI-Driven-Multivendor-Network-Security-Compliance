@@ -17,6 +17,7 @@ import logging
 import zipfile
 
 import engine
+import controls
 import frameworks
 import inventory
 import notify
@@ -28,7 +29,8 @@ log = logging.getLogger("net-audit.reports")
 ORANGE, INK, GREY, LIGHT = (250, 88, 45), (20, 20, 20), (110, 110, 110), (244, 244, 244)
 SEV_COLOR = {"critical": (214, 58, 26), "high": (230, 126, 34), "medium": (214, 170, 0), "low": (60, 150, 190)}
 STATUS_COLOR = {"fail": (214, 58, 26), "accepted": (214, 170, 0), "pass": (22, 160, 80),
-                "not_assessed": GREY, "not_covered": GREY}
+                "attested": (22, 130, 160), "not_assessed": GREY, "not_covered": GREY,
+                "not_applicable": GREY}
 MARGIN = 50
 WIDTH = pdf.PAGE_W - 2 * MARGIN
 SCHEDULES = (("off", "Do not send"), ("weekly", "Every week"), ("monthly", "Every month"))
@@ -276,14 +278,16 @@ def executive_pdf(org):
     # Frameworks
     flow.heading("Compliance frameworks")
     rows = []
-    for fw in frameworks.assess_all(all_findings, n):
+    for fw in frameworks.assess_all(all_findings, n, controls.register(org_id)):
         c = fw["counts"]
         rows.append([fw["title"], f"{fw['score']}%" if fw["score"] is not None else "-",
-                     str(c["pass"]), str(c["fail"]), str(c["accepted"]), str(c["not_covered"])])
+                     str(c["pass"] + c["attested"]), str(c["fail"]), str(c["accepted"]),
+                     str(c["not_covered"])])
     flow.table([("Framework", 185, "left"), ("Share passing", 70, "right"), ("Passing", 55, "right"),
-                ("Failing", 55, "right"), ("Risk accepted", 70, "right"), ("No rule yet", 60, "right")], rows)
-    flow.para("The share is the controls with no open finding, out of the controls net-audit can check. "
-              "Controls with no rule yet are outside that share and need other evidence.", 8.5, GREY)
+                ("Failing", 55, "right"), ("Risk accepted", 70, "right"), ("No evidence", 60, "right")], rows)
+    flow.para("The share is the controls that pass an audit or are attested with evidence in the control "
+              "register, out of all assessed controls. Controls recorded as not applicable are left out. "
+              "Controls with no rule and no evidence yet are outside the share.", 8.5, GREY)
 
     # Workflow
     flow.heading("What is being done")
@@ -321,14 +325,18 @@ def _evidence_pdf(org, assessed, devs):
               "configuration of every device in scope. Passing: no device has an open finding for those "
               "rules. Failing: at least one does. Risk accepted: the only findings are ones whose risk "
               "was accepted, with a reason and an expiry date. No rule yet: net-audit does not check "
-              "this control, so it needs other evidence. Finding-level detail, with the dates each "
-              "finding was first and last seen, is in findings.csv.", 9, GREY)
+              "this control and nobody has attested it yet. Attested: no rule checks it, and the control "
+              "register records it as implemented, with evidence, and not overdue for review. Not "
+              "applicable: recorded as out of scope, with a reason. Owners, evidence and review dates are "
+              "in controls.csv; finding-level detail, with the dates each finding was first and last "
+              "seen, is in findings.csv.", 9, GREY)
 
     for fw in assessed:
         c = fw["counts"]
         flow.heading(fw["title"])
-        flow.para(f"{c['pass']} passing, {c['fail']} failing, {c['accepted']} risk accepted, "
-                  f"{c['not_assessed']} not assessed, {c['not_covered']} with no rule yet.", 9.5)
+        flow.para(f"{c['pass']} passing, {c['attested']} attested, {c['fail']} failing, "
+                  f"{c['accepted']} risk accepted, {c['not_assessed']} not assessed, "
+                  f"{c['not_covered']} with no rule or evidence yet, {c['not_applicable']} not applicable.", 9.5)
         flow.y += 4
         rows = []
         for ctl in fw["controls"]:
@@ -340,6 +348,14 @@ def _evidence_pdf(org, assessed, devs):
             elif ctl["status"] == "accepted":
                 until = sorted((f.get("risk") or {}).get("expires_at", "")[:10] for f in ctl["findings"])
                 evidence = f"{len(ctl['findings'])} accepted, earliest expiry {until[0]}" if until else ""
+            elif ctl["status"] == "attested":
+                reg = ctl["register"]
+                n_ev = reg["evidence_count"]
+                evidence = f"{n_ev} evidence item{'' if n_ev == 1 else 's'}, review by {reg['next_review'] or '-'}"
+            elif ctl["status"] == "not_applicable":
+                evidence = ctl["register"]["na_reason"][:90]
+            if ctl["register"]["owner"]:
+                evidence = (evidence + "; " if evidence else "") + "owner " + ctl["register"]["owner"]
             rows.append([ctl["id"], ctl["title"], ", ".join(ctl["rules"]) or "-",
                          (frameworks.STATUS_LABEL[ctl["status"]], STATUS_COLOR[ctl["status"]]), evidence])
         flow.table([("Control", 52, "left"), ("Title", 165, "left"), ("Checked by", 90, "left"),
@@ -353,15 +369,23 @@ def evidence_pack(org, framework_key=None):
     devs = inventory.devices(org_id)
     all_findings = inventory.findings(org_id)
     keys = [framework_key] if framework_key else [fw["key"] for fw in frameworks.framework_list()]
-    assessed = [frameworks.assess(k, all_findings, len(devs)) for k in keys]
+    reg = controls.register(org_id)
+    assessed = [frameworks.assess(k, all_findings, len(devs), reg) for k in keys]
     assessed = [a for a in assessed if a]
 
     control_rows, finding_rows = [], []
     for fw in assessed:
         for ctl in fw["controls"]:
+            entry = reg.get((fw["key"], ctl["id"])) or {}
+            evidence = " | ".join(e["text"] + (f" <{e['link']}>" if e.get("link") else "")
+                                  for e in entry.get("evidence") or [])
             control_rows.append([fw["title"], ctl["id"], ctl["title"], frameworks.STATUS_LABEL[ctl["status"]],
                                  " ".join(ctl["rules"]), len(ctl["devices"]), len(ctl["findings"]),
-                                 " ".join(ctl["devices"])])
+                                 " ".join(ctl["devices"]), entry.get("owner", ""),
+                                 controls.IMPLEMENTATION_LABEL.get(entry.get("implementation", ""), ""),
+                                 entry.get("na_reason", ""), entry.get("notes", ""), evidence,
+                                 _date(entry.get("last_reviewed_at")), entry.get("last_reviewed_by", ""),
+                                 entry.get("next_review", "")])
     for f in all_findings:
         risk = f.get("risk") or {}
         mapping = frameworks.controls_of(f)
@@ -383,7 +407,9 @@ def evidence_pack(org, framework_key=None):
     files = {
         "evidence.pdf": _evidence_pdf(org, assessed, devs),
         "controls.csv": _csv(["framework", "control", "title", "status", "checked_by_rules",
-                              "failing_devices", "findings", "failing_device_names"], control_rows),
+                              "failing_devices", "findings", "failing_device_names", "owner",
+                              "implementation", "not_applicable_reason", "notes", "evidence",
+                              "last_reviewed", "last_reviewed_by", "next_review"], control_rows),
         "findings.csv": _csv(["device", "type", "rule", "severity", "where", "description", "status",
                               "first_seen", "last_seen", "resolved", "assignee", "risk_reason",
                               "risk_expires", "risk_accepted_by", "ticket", "controls"], finding_rows),
@@ -393,14 +419,15 @@ def evidence_pack(org, framework_key=None):
             "net-audit compliance evidence pack\r\n"
             "==================================\r\n\r\n"
             "evidence.pdf   status of every control, per framework\r\n"
-            "controls.csv   the same, one row per control\r\n"
+            "controls.csv   the same, one row per control, with owner, evidence and review dates\r\n"
             "findings.csv   every finding with its state, dates, owner and risk acceptance\r\n"
             "devices.csv    the devices in scope and when each was last audited\r\n"
             "manifest.json  what produced this pack, and a SHA-256 checksum of each file\r\n\r\n"
             "Scope and limits\r\n"
             "----------------\r\n"
             "The results describe device configurations as last audited, not live device state.\r\n"
-            "A control marked \"No rule yet\" is not checked by net-audit and needs other evidence.\r\n"
+            "A control marked \"No rule yet\" is not checked by net-audit and has no attested evidence.\r\n"
+            "Attested controls rest on evidence recorded in the control register, not on an audit.\r\n"
             "The rule-to-control mapping is published by the net-audit engine\r\n"
             "(net-audit --list-rules --format json) and should be reviewed against your own\r\n"
             "copy of each framework before it is relied on.\r\n").encode("utf-8"),

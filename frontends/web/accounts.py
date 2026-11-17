@@ -193,6 +193,30 @@ def sign_out():
     session.clear()
 
 
+# ---------------------------------------------------------------------------
+# Admin unlock: an admin re-enters their password before changing the control
+# register, and the unlock lasts ADMIN_UNLOCK_MINUTES. API tokens never unlock.
+# ---------------------------------------------------------------------------
+def admin_unlocked():
+    return (g.get("user") is not None and not g.get("via_token") and can(g.get("role"), "admin")
+            and (session.get("admin_until") or "") > now())
+
+
+def unlock_admin(password):
+    """Check the signed-in admin's password and unlock admin changes. Raises AccountError."""
+    if g.get("via_token") or not can(g.get("role"), "admin"):
+        raise AccountError("Only an administrator can unlock control management.")
+    user = authenticate(g.user["email"], password)       # counts failures, locks out like sign-in
+    if user["_id"] != g.user["_id"]:
+        raise AccountError("The email or password is not correct.")
+    session["admin_until"] = later(minutes=config.ADMIN_UNLOCK_MINUTES)
+    return session["admin_until"]
+
+
+def lock_admin():
+    session.pop("admin_until", None)
+
+
 def csrf_token():
     if "csrf" not in session:
         session["csrf"] = secrets.token_urlsafe(24)

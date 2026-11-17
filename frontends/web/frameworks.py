@@ -11,6 +11,7 @@ that have no rule yet. Titles are short paraphrases, not the standards' text.
 """
 import re
 
+import controls
 import engine
 
 # (control id, title). A control listed here with no rule mapped to it is
@@ -126,9 +127,10 @@ CONTROLS = {
     ],
 }
 
-STATUS_ORDER = ("fail", "accepted", "pass", "not_assessed", "not_covered")
+STATUS_ORDER = ("fail", "accepted", "pass", "attested", "not_assessed", "not_covered", "not_applicable")
 STATUS_LABEL = {"fail": "Failing", "accepted": "Risk accepted", "pass": "Passing",
-                "not_assessed": "Not assessed", "not_covered": "No rule yet"}
+                "attested": "Attested", "not_assessed": "Not assessed", "not_covered": "No rule yet",
+                "not_applicable": "Not applicable"}
 # Findings in these workflow states count against a control. A finding that
 # was marked fixed stays here until an audit verifies it.
 OPEN_STATES = ("open", "assigned", "fixed")
@@ -159,13 +161,18 @@ def controls_of(finding):
     return mapping
 
 
-def assess(key, findings, device_count):
+def assess(key, findings, device_count, register=None):
     """Control-by-control status of one framework.
 
     `findings` are the organization's current finding documents (any state);
-    fixed and verified ones are ignored. Returns {"key", "title", "controls":
-    [...], "counts": {status: n}, "score": pass share of assessed controls}.
+    fixed and verified ones are ignored. `register` is the organization's
+    control register ({(framework key, control id): entry}, see controls.py):
+    a control recorded as not applicable leaves the score, and one no rule
+    checks counts as attested once it is implemented with evidence and not
+    overdue for review. Returns {"key", "title", "controls": [...], "counts":
+    {status: n}, "score": share of assessed controls that pass or are attested}.
     """
+    register = register or {}
     fw = framework(key)
     if fw is None:
         return None
@@ -182,13 +189,17 @@ def assess(key, findings, device_count):
         if f.get("status") in OPEN_STATES + ("risk_accepted",):
             by_rule.setdefault(f["rule_id"], []).append(f)
 
-    controls = []
+    out = []
     for cid in sorted(titles, key=_natural):
         rule_ids = rules_for.get(cid, [])
         hits = [f for rid in rule_ids for f in by_rule.get(rid, [])]
         failing = [f for f in hits if f.get("status") in OPEN_STATES]
-        if not rule_ids:
-            status = "not_covered"
+        entry = register.get((key, cid))
+        impl = (entry or {}).get("implementation", "")
+        if impl == "not_applicable":
+            status = "not_applicable"
+        elif not rule_ids:
+            status = "attested" if controls.attested(entry) else "not_covered"
         elif device_count == 0:
             status = "not_assessed"
         elif failing:
@@ -197,19 +208,34 @@ def assess(key, findings, device_count):
             status = "accepted"
         else:
             status = "pass"
-        controls.append({
+        out.append({
             "id": cid, "title": titles[cid], "status": status, "rules": rule_ids,
             "findings": hits,
             "devices": sorted({f.get("hostname", "") for f in failing}),
+            "register": controls.summary(entry),
         })
 
-    counts = {s: sum(1 for c in controls if c["status"] == s) for s in STATUS_ORDER}
-    assessed = counts["pass"] + counts["fail"] + counts["accepted"]
-    return {"key": key, "title": fw["title"], "label": fw["label"], "controls": controls,
+    counts = {s: sum(1 for c in out if c["status"] == s) for s in STATUS_ORDER}
+    assessed = counts["pass"] + counts["fail"] + counts["accepted"] + counts["attested"]
+    passing = counts["pass"] + counts["attested"]
+    return {"key": key, "title": fw["title"], "label": fw["label"], "controls": out,
             "counts": counts,
-            "score": round(100 * counts["pass"] / assessed) if assessed else None,
-            "covered": len(controls) - counts["not_covered"], "total": len(controls)}
+            "score": round(100 * passing / assessed) if assessed else None,
+            "covered": sum(1 for c in out if c["rules"]), "total": len(out),
+            "owned": sum(1 for c in out if c["register"]["owner"]),
+            "review_overdue": sum(1 for c in out if c["register"]["review_overdue"])}
 
 
-def assess_all(findings, device_count):
-    return [assess(fw["key"], findings, device_count) for fw in framework_list()]
+def assess_all(findings, device_count, register=None):
+    return [assess(fw["key"], findings, device_count, register) for fw in framework_list()]
+
+
+def control(key, control_id):
+    """(control id, title) when the control is listed for, or mapped in, a framework."""
+    for cid, title in CONTROLS.get(key, []):
+        if cid == control_id:
+            return cid, title
+    for rule in engine.rules():
+        if control_id in rule["frameworks"].get(key, []):
+            return control_id, ""
+    return None
