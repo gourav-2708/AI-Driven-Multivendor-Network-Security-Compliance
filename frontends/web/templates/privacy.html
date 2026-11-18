@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% from "_macros.html" import rule_line with context %}
+{% block title %}Privacy policy{% endblock %}
+
+{% block subnav %}
+<a href="#collect" class="active">What we collect</a>
+<a href="#never">What we never keep</a>
+<a href="#share">Who can see it</a>
+<a href="#retention">How long</a>
+<a href="#rights">Your rights</a>
+{% endblock %}
+{% block subnav_cta %}{% endblock %}
+
+{% block content %}
+<section class="page-top compact stripes-tr">
+  <div class="wrap">
+    {{ rule_line() }}
+    <p class="eyebrow">net-audit</p>
+    <h1>Privacy policy</h1>
+    <div class="meta-row">
+      <span>Last updated {{ policy.updated }}</span>
+      <span>Operated by {{ policy.operator or 'the operator of this server' }}</span>
+    </div>
+  </div>
+</section>
+
+<section class="sec-app">
+  <div class="wrap policy">
+    {% if not policy.operator or not policy.contact %}
+    <p class="policy-note">The operator of this server has not yet published
+      {% if not policy.operator %}its name{% endif %}{% if not policy.operator and not policy.contact %} or {% endif %}{% if not policy.contact %}a privacy contact{% endif %}.
+      Until it does, send privacy questions to the administrator of your organization.
+      (Operators: set <code>NET_AUDIT_OPERATOR</code> and <code>NET_AUDIT_PRIVACY_CONTACT</code>.)</p>
+    {% endif %}
+
+    <p>net-audit checks the configuration files of network devices (routers, switches and firewalls)
+      against security rules and compliance frameworks. This page explains what personal and customer
+      information this service keeps, why, who can see it, how long it is kept, and what you can ask for.
+      It describes how the software on this server actually works.</p>
+
+    <h2 id="who">1. Who is responsible</h2>
+    <p>This service is run by <b>{{ policy.operator or 'the operator of this server' }}</b>, which decides how
+      the information described here is used.
+      {% if policy.contact %}Privacy questions and requests: <a class="link-u" href="{{ policy.contact_href }}">{{ policy.contact }}</a>.{% endif %}</p>
+    <p>Each organization that uses the service decides what it uploads and who in it gets an account.
+      Its administrators manage its users, data and integrations.</p>
+
+    <h2 id="collect">2. What we collect</h2>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Information</th><th>What it includes</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Your account</td><td>Email address, name (optional), role, organization name, a hash of your password, time of your last sign-in, count of failed sign-ins</td><td>To sign you in, keep accounts apart, and lock an account after repeated failed sign-ins</td></tr>
+          <tr><td>Audit results</td><td>Device host names, vendor, OS version, score, findings (rule, severity, the part of the configuration concerned, a line number, description, fix), names of the uploaded files, who ran the audit and when</td><td>To show reports, history and trends</td></tr>
+          <tr><td>Device inventory</td><td>Host name, vendor, site, owner and notes you enter, current score, score history</td><td>To track devices over time and raise drift alerts</td></tr>
+          <tr><td>Findings and the control register</td><td>Status, assignee, risk-acceptance reasons and dates, ticket numbers, control owners, evidence descriptions and links, review dates, and a history of who changed what</td><td>To manage fixes and compliance evidence</td></tr>
+          <tr><td>Integration settings</td><td>Addresses of Git or Oxidized sources, Slack, Jira, ServiceNow and email settings, and the credentials an administrator enters for them</td><td>To fetch configurations and send alerts and tickets the administrator asked for</td></tr>
+          <tr><td>Audit log</td><td>Time, user, action, what it applied to, and the IP address of the request</td><td>Security and accountability: who signed in, ran, viewed, exported, changed or deleted what</td></tr>
+          <tr><td>Session cookie</td><td>One cookie, <code>net_audit_session</code>, holding your signed-in session and a form-protection token</td><td>To keep you signed in. It is required for the service to work and is not used for tracking.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="never">3. What we never keep</h2>
+    <ul>
+      <li><b>Configuration files.</b> Files you upload, or that are fetched from a source, are written to a temporary folder, audited, and deleted as soon as the audit finishes, whether it worked or not. Only the report is kept.</li>
+      <li><b>Readable passwords.</b> Your password is stored only as a salted hash. API tokens, password-reset links and invitation links are stored only as hashes.</li>
+      <li><b>Secrets from your configurations.</b> Reports do not contain passwords, keys or whole configuration lines. An SNMP community string that is not a well-known default is cut to its first two characters.</li>
+      <li><b>Tracking or analytics.</b> The service sends no usage data or telemetry anywhere, shows no advertising, and does not sell or rent information to anyone.</li>
+    </ul>
+
+    <h2 id="share">4. Who can see it</h2>
+    <ul>
+      <li><b>Your organization.</b> Signed-in users and API tokens can see only their own organization's information. Viewers can read; auditors can also run audits and work on findings; administrators can also manage users, integrations and the audit log, and delete data.</li>
+      <li><b>The operator.</b> Whoever runs this server and its database can technically read everything stored in it, and does so only to run, secure and support the service.</li>
+      <li><b>Service providers.</b> {{ policy.hosting }}</li>
+      <li><b>Services your administrators connect.</b> Only when an administrator sets them up: Git hosts and Oxidized servers (to fetch configurations); Slack and email (drift alerts: organization name, device host name, score change, rule IDs); Jira and ServiceNow (tickets: device host name, rule, severity, description, fix, control IDs); report recipients (the executive PDF); the mail server (invitations and password-reset links).</li>
+      {% if not policy.offline %}
+      <li><b>Web fonts.</b> Pages load two fonts from Google Fonts, so your browser contacts Google when a page opens.</li>
+      {% endif %}
+      <li><b>When the law requires it.</b> The operator may disclose information if a valid legal order requires it.</li>
+    </ul>
+
+    <h2 id="security">5. How it is protected</h2>
+    <ul>
+      <li>Passwords, tokens and one-time links are stored only as hashes.</li>
+      <li>The session cookie is HTTP-only{% if policy.secure_cookie %}, sent only over HTTPS{% endif %}, and every form is protected against cross-site request forgery.</li>
+      <li>An account is locked for {{ policy.lock_minutes }} minutes after {{ policy.max_failures }} failed sign-ins.</li>
+      <li>Every request is checked against the user's organization and role. Changing the control register needs an administrator to re-enter their password.</li>
+      <li>Credentials entered for integrations are stored as entered, because they must be sent to the other system; they are never shown again or returned by the API. Administrators should give integrations accounts with the least access they need.</li>
+    </ul>
+
+    <h2 id="retention">6. How long it is kept</h2>
+    <ul>
+      <li>Configuration files: only for the length of the audit.</li>
+      <li>Audit reports: until an administrator deletes them.</li>
+      <li>Devices, their score history, findings and alerts: until an administrator removes the device.</li>
+      <li>Integration settings and API tokens: until an administrator removes or revokes them.</li>
+      <li>Accounts, organizations and the audit log: kept while the service is used. There is no self-service deletion of these yet and no automatic expiry; ask for deletion as described below.</li>
+    </ul>
+
+    <h2 id="rights">7. Your choices and rights</h2>
+    <p>Depending on where you live, you may have the right to see, correct, export or delete your personal information, or object to how it is used.</p>
+    <ul>
+      <li><b>See and export:</b> reports can be downloaded as JSON, CSV, text and PDF, and administrators can download the evidence pack and the audit log.</li>
+      <li><b>Correct:</b> change your password in Settings; ask an administrator to correct other details.</li>
+      <li><b>Delete:</b> administrators can delete audits and devices themselves. To delete an account, an organization or audit-log entries, contact {{ policy.contact or 'the operator through your organization’s administrator' }}.</li>
+    </ul>
+
+    <h2 id="other">8. Other things to know</h2>
+    <ul>
+      <li>The service is meant for organizations and their staff, not for children.</li>
+      <li>Self-hosted copies of net-audit are run by the organization that installed them; this policy describes how the software behaves, and that organization is responsible for its own copy.</li>
+      <li>If this policy changes, the date at the top changes too.</li>
+    </ul>
+  </div>
+</section>
+{% endblock %}

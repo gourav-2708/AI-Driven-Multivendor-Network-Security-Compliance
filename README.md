@@ -460,6 +460,7 @@ documents each one. The ones that matter most:
 | `NET_AUDIT_SIGNUP` | `closed`: after the first account, users must be invited |
 | `NET_AUDIT_ADMIN_UNLOCK_MINUTES` | how long control management stays unlocked after an admin re-enters their password (default 15) |
 | `NET_AUDIT_BASE_URL` | public address, for links in emails |
+| `NET_AUDIT_OPERATOR`, `NET_AUDIT_PRIVACY_CONTACT` | who runs the server and where to send privacy questions, shown on the privacy policy page (`/privacy`) |
 | `SMTP_HOST`, `SMTP_FROM`, ... | email for invitations, resets, alerts and reports; without it, one-time links are shown to the admin and written to the server log |
 | `NET_AUDIT_INTAKE_ROOT` | the only folder "folder" sources may read; unset, they are switched off |
 | `NET_AUDIT_BLOCK_PRIVATE_URLS` | `1`: refuse outbound calls to private addresses; turn on when strangers can sign up |

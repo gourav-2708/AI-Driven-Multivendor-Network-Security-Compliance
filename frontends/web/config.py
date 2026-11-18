@@ -102,6 +102,11 @@ INVITE_TOKEN_HOURS = 72
 OFFLINE = _flag("NET_AUDIT_OFFLINE", False)
 # Public address of this dashboard, used in links sent by email.
 BASE_URL = (os.environ.get("NET_AUDIT_BASE_URL") or "").rstrip("/")
+# Shown on the privacy policy page: who runs this server, and where to send
+# privacy questions (an email address or a web address).
+OPERATOR = (os.environ.get("NET_AUDIT_OPERATOR") or "").strip()[:120]
+PRIVACY_CONTACT = (os.environ.get("NET_AUDIT_PRIVACY_CONTACT") or "").strip()[:200]
+PRIVACY_UPDATED = (os.environ.get("NET_AUDIT_PRIVACY_UPDATED") or "2026-11-18").strip()[:20]
 
 
 def secret_key():

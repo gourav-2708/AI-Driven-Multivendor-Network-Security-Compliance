@@ -13,7 +13,7 @@
     <label>Email <input class="input" type="email" name="email" value="{{ email }}" autocomplete="username" required autofocus></label>
     <label>Password <input class="input" type="password" name="password" autocomplete="current-password" required></label>
     <button class="btn btn-primary" type="submit">Sign in</button>
-    <p class="auth-links"><a href="{{ url_for('forgot_page') }}">Forgot your password?</a><a href="{{ url_for('signup_page') }}">Create an account</a></p>
+    <p class="auth-links"><a href="{{ url_for('forgot_page') }}">Forgot your password?</a><a href="{{ url_for('signup_page') }}">Create an account</a><a href="{{ url_for('privacy_page') }}">Privacy</a></p>
   </form>
 </section>
 {% endblock %}

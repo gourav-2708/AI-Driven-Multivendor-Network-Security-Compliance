@@ -15,6 +15,7 @@
     <label>Your name <small>optional</small><input class="input" name="name" value="{{ form.get('name', '') }}" maxlength="80" autocomplete="name"></label>
     <label>Email <input class="input" type="email" name="email" value="{{ form.get('email', '') }}" autocomplete="username" required></label>
     <label>Password <small>at least 12 characters</small><input class="input" type="password" name="password" minlength="12" autocomplete="new-password" required></label>
+    <p class="help">How your information is handled: <a class="link-u" href="{{ url_for('privacy_page') }}" target="_blank" rel="noopener">privacy policy</a>.</p>
     <button class="btn btn-primary" type="submit">Create account</button>
     <p class="auth-links"><span>Already have one?</span><a href="{{ url_for('login_page') }}">Sign in</a></p>
   </form>
