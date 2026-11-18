@@ -169,3 +169,11 @@ pre.code { margin: 10px 0 0; padding: 14px 16px; background: #0c0c0c; border: 1p
 .subnav-cta { display: flex; gap: 10px; align-items: center; }
 .subnav-cta form { margin: 0; }
 @media (max-width: 700px) { .subnav-cta .btn-ghost { display: none; } }
+
+/* Privacy policy: readable text width. */
+.policy { max-width: 900px; }
+.policy h2 { font-size: 22px; margin: 34px 0 12px; }
+.policy p, .policy li { color: var(--text-2); line-height: 1.65; max-width: 75ch; }
+.policy ul { padding-left: 20px; display: grid; gap: 8px; }
+.policy .table-wrap { margin: 8px 0 4px; }
+.policy-note { padding: 14px 18px; margin: 0 0 22px; border: 1px solid var(--med); border-radius: 12px; color: var(--text-2); }

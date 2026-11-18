@@ -156,6 +156,39 @@ def _link(endpoint, **values):
 # ---------------------------------------------------------------------------
 # Sign-in, sign-up, password reset
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Privacy policy (public)
+# ---------------------------------------------------------------------------
+def _privacy_facts():
+    """What the policy page says about this deployment, without revealing settings."""
+    contact = config.PRIVACY_CONTACT
+    if contact.startswith(("http://", "https://")):
+        href = contact
+    elif "@" in contact and " " not in contact:
+        href = "mailto:" + contact
+    else:
+        href = ""
+    uri = config.MONGODB_URI.lower()
+    if config.MONGODB_URI:
+        where = ("a MongoDB Atlas database" if ".mongodb.net" in uri else "a MongoDB database")
+    else:
+        where = "a database file on the server"
+    host = "This service runs on Vercel" if config.ON_VERCEL else "This service runs on the operator's own server"
+    return {
+        "operator": config.OPERATOR, "contact": contact if href else "", "contact_href": href,
+        "updated": config.PRIVACY_UPDATED, "offline": config.OFFLINE,
+        "secure_cookie": config.COOKIE_SECURE, "lock_minutes": config.LOGIN_LOCK_MINUTES,
+        "max_failures": config.LOGIN_MAX_FAILURES,
+        "hosting": f"{host} and stores its information in {where}. These providers process "
+                   "the information only to host and store it for the operator.",
+    }
+
+
+@app.route("/privacy")
+def privacy_page():
+    return render_template("privacy.html", policy=_privacy_facts())
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
     if g.user:

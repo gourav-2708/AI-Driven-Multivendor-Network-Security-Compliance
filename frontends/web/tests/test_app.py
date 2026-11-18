@@ -150,6 +150,28 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(self.anon.c.delete("/api/result/0ldaud1t").status_code, 401)
         self.assertEqual(self.anon.get("/api/health").status_code, 200)
 
+    def test_01b_privacy_policy_is_public(self):
+        r = self.anon.get("/privacy")
+        self.assertEqual(r.status_code, 200)
+        page = r.data.decode()
+        for text in ("Privacy policy", "deleted as soon as the audit finishes", "net_audit_session",
+                     "salted hash", "not yet published"):
+            self.assertIn(text, page)
+        self.assertIn('href="/privacy"', self.anon.get("/login").data.decode())
+        self.assertIn('href="/privacy"', self.anon.get("/signup").data.decode())
+        import config
+        old = (config.OPERATOR, config.PRIVACY_CONTACT)
+        try:
+            config.OPERATOR, config.PRIVACY_CONTACT = "Acme Audit Ltd", "privacy@acme.test"
+            page = self.anon.get("/privacy").data.decode()
+            self.assertIn("Acme Audit Ltd", page)
+            self.assertIn('href="mailto:privacy@acme.test"', page)
+            self.assertNotIn("not yet published", page)
+            config.PRIVACY_CONTACT = "javascript:alert(1)"            # never becomes a link
+            self.assertNotIn("javascript:", self.anon.get("/privacy").data.decode())
+        finally:
+            config.OPERATOR, config.PRIVACY_CONTACT = old
+
     def test_02_signup_creates_org_and_adopts_old_history(self):
         r = self.alice.signup("Acme Networks", "alice@acme.test")
         self.assertEqual(r.status_code, 302)
